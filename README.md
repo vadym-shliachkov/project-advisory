@@ -22,20 +22,25 @@ Eleven areas are analysed by parallel subagents: AI setup, architecture, deliver
 Claude Code:
 
 ```bash
-claude plugin marketplace add <path-or-git-url-of-this-repo>
+claude plugin marketplace add https://github.com/vadym-shliachkov/project-advisory.git
 claude plugin install project-health@project-health
+claude plugin install council@project-health
 ```
 
 Codex:
 
 ```bash
-codex plugin marketplace add <path-of-this-repo>
+git clone https://github.com/vadym-shliachkov/project-advisory.git
+codex plugin marketplace add ./project-advisory
 ```
 
-Then enable `project-health` from the plugin list in the Codex app, or add to `.codex/config.toml`:
+Then enable `project-health` and `council` from the plugin list in the Codex app, or add to `.codex/config.toml`:
 
 ```toml
 [plugins."project-health@project-health"]
+enabled = true
+
+[plugins."council@project-health"]
 enabled = true
 ```
 
