@@ -1,0 +1,493 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Implementation roadmap: one agreed solution or recorded reason for every problem a run found",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "run",
+    "solutions",
+    "declined"
+  ],
+  "properties": {
+    "run": {
+      "type": "string",
+      "minLength": 4
+    },
+    "updatedAt": {
+      "type": "string"
+    },
+    "context": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "constraints": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 3
+          }
+        },
+        "priorities": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 3
+          }
+        },
+        "notes": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 3
+          }
+        }
+      }
+    },
+    "summary": {
+      "type": "string",
+      "minLength": 40
+    },
+    "phases": {
+      "type": "array",
+      "maxItems": 8,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "title",
+          "goal"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^PH\\d{1,2}$"
+          },
+          "title": {
+            "type": "string",
+            "minLength": 3
+          },
+          "goal": {
+            "type": "string",
+            "minLength": 10
+          }
+        }
+      }
+    },
+    "solutions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "title",
+          "status",
+          "findingIds"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^S\\d{1,3}$"
+          },
+          "title": {
+            "type": "string",
+            "minLength": 5
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "draft",
+              "agreed"
+            ]
+          },
+          "agreedAt": {
+            "type": "string"
+          },
+          "phase": {
+            "type": "string",
+            "pattern": "^PH\\d{1,2}$"
+          },
+          "owner": {
+            "type": "string",
+            "minLength": 2
+          },
+          "findingIds": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "string",
+              "pattern": "^[A-Z]+-[0-9a-f]{4,8}$"
+            }
+          },
+          "problem": {
+            "type": "string",
+            "minLength": 20
+          },
+          "options": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 5,
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "name",
+                "summary"
+              ],
+              "properties": {
+                "name": {
+                  "type": "string",
+                  "minLength": 3
+                },
+                "summary": {
+                  "type": "string",
+                  "minLength": 10
+                },
+                "pros": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "minLength": 3
+                  }
+                },
+                "cons": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "minLength": 3
+                  }
+                },
+                "effort": {
+                  "type": "string",
+                  "enum": [
+                    "quick",
+                    "small",
+                    "medium",
+                    "large"
+                  ]
+                },
+                "steps": {
+                  "description": "The route this option takes, step by step, so routes can be compared side by side. Steps with the same name in different options are the same step; a step an option leaves out is not needed on that route.",
+                  "type": "array",
+                  "minItems": 1,
+                  "maxItems": 20,
+                  "items": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "step"
+                    ],
+                    "properties": {
+                      "step": {
+                        "type": "string",
+                        "minLength": 3
+                      },
+                      "assignee": {
+                        "type": "string",
+                        "minLength": 2
+                      },
+                      "estimate": {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "required": [
+                          "min",
+                          "max",
+                          "unit"
+                        ],
+                        "properties": {
+                          "min": {
+                            "type": "number"
+                          },
+                          "max": {
+                            "type": "number"
+                          },
+                          "unit": {
+                            "type": "string",
+                            "enum": [
+                              "hours",
+                              "days"
+                            ]
+                          }
+                        }
+                      },
+                      "note": {
+                        "type": "string",
+                        "minLength": 3
+                      },
+                      "orAssignees": {
+                        "type": "array",
+                        "items": { "type": "string", "minLength": 2 }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "chosen": {
+            "type": "string",
+            "minLength": 3
+          },
+          "choiceBy": {
+            "description": "The person who chooses between the routes later, when the plan is agreed with every route kept open",
+            "type": "string",
+            "minLength": 2
+          },
+          "rationale": {
+            "type": "string",
+            "minLength": 20
+          },
+          "approach": {
+            "type": "string",
+            "minLength": 40
+          },
+          "tasks": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 20,
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "id",
+                "kind",
+                "title",
+                "detail"
+              ],
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "pattern": "^S\\d{1,3}\\.\\d{1,2}$"
+                },
+                "kind": {
+                  "type": "string",
+                  "enum": [
+                    "check",
+                    "work"
+                  ]
+                },
+                "title": {
+                  "type": "string",
+                  "minLength": 5
+                },
+                "detail": {
+                  "type": "string",
+                  "minLength": 20
+                },
+                "assignee": {
+                  "type": "string",
+                  "minLength": 2
+                },
+                "estimate": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "min",
+                    "max",
+                    "unit"
+                  ],
+                  "properties": {
+                    "min": {
+                      "type": "number"
+                    },
+                    "max": {
+                      "type": "number"
+                    },
+                    "unit": {
+                      "type": "string",
+                      "enum": [
+                        "hours",
+                        "days"
+                      ]
+                    }
+                  }
+                },
+                "sizeNote": {
+                  "type": "string",
+                  "minLength": 10
+                },
+                "checklist": {
+                  "description": "Points this task settles, each with what is needed and why it matters",
+                  "type": "array",
+                  "maxItems": 20,
+                  "items": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": ["point"],
+                    "properties": {
+                      "point": { "type": "string", "minLength": 3 },
+                      "needs": { "type": "string", "minLength": 3 },
+                      "why": { "type": "string", "minLength": 3 }
+                    }
+                  }
+                },
+                "orAssignees": {
+                  "description": "Other people agreed to do this instead of the assignee",
+                  "type": "array",
+                  "items": { "type": "string", "minLength": 2 }
+                },
+                "route": {
+                  "description": "The option this task belongs to when the routes differ; tasks without a route are common to every route",
+                  "type": "string",
+                  "minLength": 3
+                },
+                "files": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                },
+                "after": {
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "pattern": "^S\\d{1,3}\\.\\d{1,2}$"
+                  }
+                }
+              }
+            }
+          },
+          "acceptanceCriteria": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 10,
+            "items": {
+              "type": "string",
+              "minLength": 10
+            }
+          },
+          "needs": {
+            "type": "array",
+            "maxItems": 8,
+            "items": {
+              "type": "string",
+              "minLength": 5
+            }
+          },
+          "dependsOn": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "pattern": "^S\\d{1,3}$"
+            }
+          },
+          "risks": {
+            "type": "array",
+            "maxItems": 8,
+            "items": {
+              "type": "string",
+              "minLength": 5
+            }
+          },
+          "notes": {
+            "type": "array",
+            "maxItems": 10,
+            "items": {
+              "type": "string",
+              "minLength": 5
+            }
+          }
+        }
+      }
+    },
+    "declined": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "findingIds",
+          "resolution",
+          "reason"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^X\\d{1,3}$"
+          },
+          "findingIds": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "string",
+              "pattern": "^[A-Z]+-[0-9a-f]{4,8}$"
+            }
+          },
+          "resolution": {
+            "type": "string",
+            "enum": [
+              "backlog",
+              "wont-fix",
+              "accepted-risk",
+              "not-applicable",
+              "already-fixed",
+              "wrong"
+            ]
+          },
+          "revisit": {
+            "type": "string",
+            "minLength": 5
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 10
+          },
+          "decidedAt": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "questions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "text",
+          "status"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^Q\\d{1,3}$"
+          },
+          "text": {
+            "type": "string",
+            "minLength": 5
+          },
+          "findingIds": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "pattern": "^[A-Z]+-[0-9a-f]{4,8}$"
+            }
+          },
+          "askedOf": {
+            "type": "string",
+            "minLength": 2
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "open",
+              "answered",
+              "dropped"
+            ]
+          },
+          "answer": {
+            "type": "string",
+            "minLength": 3
+          },
+          "raisedAt": {
+            "type": "string"
+          }
+        }
+      }
+    }
+  }
+}

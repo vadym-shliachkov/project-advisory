@@ -1,0 +1,8 @@
+{
+  "name": "project-health",
+  "version": "0.1.0",
+  "description": "Analyse a web project's health across eleven areas and produce a checklist, a branded PDF report and an optional outcome backlog.",
+  "author": { "name": "Vadym Shliachkov" },
+  "license": "MIT",
+  "keywords": ["audit", "seo", "performance", "security", "health-check"]
+}

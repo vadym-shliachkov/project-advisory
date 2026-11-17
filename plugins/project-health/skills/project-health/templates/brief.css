@@ -1,0 +1,104 @@
+/* A participant's brief: one item per page, the problem first, schematic blocks below. */
+:root {
+  --ink: #1d2433; --body: #344054; --muted: #667085; --line: #e4e7ec; --surface: #f6f7f9;
+  --accent: #1f2937; --accent-soft: #f3f4f6;
+  --good: #067647; --good-soft: #ecfdf3; --bad: #b42318; --bad-soft: #fef3f2;
+  --warn: #b54708; --warn-soft: #fffaeb; --check: #175cd3; --check-soft: #eff4ff;
+  --sans: "IBM Plex Sans", "Segoe UI", Arial, sans-serif; --serif: "IBM Plex Serif", Georgia, serif;
+  --mono: "IBM Plex Mono", Consolas, monospace;
+}
+@page { size: A4; margin: 18mm 20mm 20mm;
+  @bottom-left { font: 8pt "IBM Plex Sans", Arial, sans-serif; color: #667085; }
+  @bottom-right { content: counter(page) " / " counter(pages); font: 8pt "IBM Plex Sans", Arial, sans-serif; color: #667085; } }
+* { box-sizing: border-box; }
+html { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+body { margin: 0; background: #fff; color: var(--body); font-family: var(--sans); font-size: 10.5pt; line-height: 1.5; }
+h1, h2, h3, h4 { color: var(--ink); margin: 0; }
+h1, h2 { font-family: var(--serif); font-weight: 600; }
+p { margin: 0; }
+b, strong { color: var(--ink); font-weight: 600; }
+p + p { margin-top: 2mm; }
+ul, ol { margin: 0; padding-left: 5mm; } li + li { margin-top: 1mm; }
+.muted { color: var(--muted); }
+.top .kicker { font-size: 8.5pt; font-weight: 600; letter-spacing: .07em; text-transform: uppercase; color: var(--muted); }
+.top h1 { font-size: 26pt; line-height: 1.15; margin: 3mm 0 3mm; }
+.top .sub { font-size: 12pt; color: var(--ink); max-width: 155mm; }
+.top .meta { font-size: 8.5pt; color: var(--muted); margin-top: 3mm; }
+h2 { font-size: 17pt; line-height: 1.2; margin: 0 0 3mm; break-after: avoid; }
+h3 { font-size: 8.5pt; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin: 6mm 0 1.8mm; break-after: avoid; }
+section.item, section.context, section.reference { break-before: page; }
+.tag { display: inline-block; font-size: .78em; font-weight: 600; letter-spacing: .02em; padding: 1pt 6pt; border-radius: 99px; background: var(--accent-soft); color: var(--accent); border: 1px solid var(--line); white-space: nowrap; }
+.tag.bad { background: var(--bad-soft); color: var(--bad); border-color: #fecdca; }
+.tag.warn { background: var(--warn-soft); color: var(--warn); border-color: #fedf89; }
+.tag.good { background: var(--good-soft); color: var(--good); border-color: #abefc6; }
+.tag.check { background: var(--check-soft); color: var(--check); border-color: #b2ccff; }
+.tags { display: flex; gap: 6pt; flex-wrap: wrap; margin-bottom: 4mm; }
+.strip { display: grid; grid-template-columns: 1.15fr 1fr 1fr; gap: 3mm; break-inside: avoid; }
+.cell { border-radius: 4pt; padding: 3mm 4mm; font-size: 10pt; line-height: 1.42; color: var(--ink); }
+.cell b.l { display: block; font-size: 7.5pt; text-transform: uppercase; letter-spacing: .07em; margin-bottom: 1mm; }
+.cell.bad { background: var(--bad-soft); border-top: 2.5pt solid var(--bad); } .cell.bad b.l { color: var(--bad); }
+.cell.ask { background: var(--check-soft); border-top: 2.5pt solid var(--check); } .cell.ask b.l { color: var(--check); }
+.cell.good { background: var(--good-soft); border-top: 2.5pt solid var(--good); } .cell.good b.l { color: var(--good); }
+.note { background: var(--surface); border-radius: 4pt; padding: 3mm 4.5mm; break-inside: avoid; margin-top: 3mm; }
+.note.warn { background: var(--warn-soft); border-left: 3pt solid var(--warn); }
+.next { margin-top: 5mm; padding-top: 2.5mm; border-top: 1px solid var(--line); font-size: 10pt; }
+table { margin-top: 2mm; width: 100%; border-collapse: collapse; font-size: 9.5pt; line-height: 1.4; }
+th { text-align: left; font-size: 7.5pt; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); border-bottom: 1.2pt solid var(--ink); padding: 0 2.5mm 1.2mm 0; }
+td { border-bottom: 1px solid var(--line); padding: 1.8mm 2.5mm 1.8mm 0; vertical-align: top; }
+tr { break-inside: avoid; }
+tr.pick td { background: var(--good-soft); } tr.pick td:first-child { box-shadow: inset 3pt 0 0 var(--good); padding-left: 2.5mm; }
+td.nw, th.nw { white-space: nowrap; }
+.glance td:first-child { font-weight: 600; color: var(--ink); width: 6mm; }
+.flow { display: flex; align-items: stretch; break-inside: avoid; }
+.flow .node { flex: 1; background: var(--surface); border-radius: 4pt; padding: 2.5mm 3mm; font-size: 9.5pt; line-height: 1.35; }
+.flow .node b { display: block; margin-bottom: .5mm; }
+.flow .node.good { background: var(--good-soft); } .flow .node.bad { background: var(--bad-soft); } .flow .node.ask { background: var(--check-soft); }
+.flow .arrow { flex: 0 0 6mm; display: flex; align-items: center; justify-content: center; color: var(--muted); font-size: 13pt; }
+.groups { display: grid; grid-template-columns: repeat(var(--cols, 3), 1fr); gap: 3mm; break-inside: avoid; }
+.group { background: var(--surface); border-radius: 4pt; padding: 3mm 3.5mm; font-size: 9pt; line-height: 1.45; }
+.group.first { background: var(--warn-soft); border-left: 3pt solid var(--warn); }
+.group b.l { display: block; font-size: 9.5pt; margin-bottom: 1mm; }
+.group p { margin-top: 1.5mm; }
+/* A block without a label of its own keeps the same distance from the cards as a labelled one. */
+.strip + :not(h3) { margin-top: 5mm; }
+.screen { border: 1px solid var(--line); border-radius: 5pt; padding: 3mm 4.5mm; break-inside: avoid; background: #111827; color: #e5e7eb; }
+.screen .eyebrow { font-size: 7.5pt; letter-spacing: .08em; text-transform: uppercase; color: #9ca3af; }
+.screen .h { font-family: var(--serif); font-size: 14pt; line-height: 1.15; color: #fff; margin: 1.2mm 0; }
+.screen .s { font-size: 9pt; color: #d1d5db; }
+.chg { background: rgba(250, 204, 21, .32); border-radius: 2pt; padding: 0 1pt; box-decoration-break: clone; -webkit-box-decoration-break: clone; }
+.screen .chg { background: rgba(250, 204, 21, .24); }
+.variant { break-inside: avoid; margin-top: 3mm; }
+.variant > b { display: block; margin-bottom: 1mm; }
+.variant .muted { font-size: 8.5pt; margin-top: 1mm; }
+.mail { background: var(--surface); border-radius: 4pt; padding: 2.5mm 4mm; white-space: pre-wrap; font-size: 8.8pt; line-height: 1.45; break-inside: avoid; margin-top: 2mm; }
+.fb { display: inline-block; min-width: 4.2mm; height: 4.2mm; line-height: 4.2mm; text-align: center; font-size: 7.5pt; font-weight: 700; color: var(--ink); background: #facc15; border-radius: 1.2pt; margin: 0 1pt; vertical-align: .3mm; }
+.ph { background: rgba(250, 204, 21, .32); border-radius: 2pt; padding: 0 1.5pt; box-decoration-break: clone; -webkit-box-decoration-break: clone; }
+.todo { background: var(--surface); border: 1px solid var(--line); border-radius: 2pt; padding: 0 1.5pt; color: var(--muted); }
+.qkey { width: 7mm; }
+.attach { break-before: page; }
+.attach > h2 { font-size: 15pt; }
+.doc { font-size: 9.5pt; line-height: 1.45; }
+.doc h4 { font-size: 10.5pt; margin: 4mm 0 1mm; break-after: avoid; }
+.doc p + p { margin-top: 1.5mm; }
+.doc table { font-size: 8.8pt; }
+.doc .pnote { font-size: 8.5pt; line-height: 1.4; color: var(--muted); border: 1px dashed var(--line); background: var(--surface); border-radius: 3pt; padding: 1.5mm 3mm; margin-top: 1.5mm; break-inside: avoid; }
+.est { white-space: nowrap; }
+/* Long words such as addresses wrap instead of widening a card or a step. */
+.strip { grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr) minmax(0, 1fr); }
+.cell, .flow .node, .group { overflow-wrap: anywhere; }
+td { overflow-wrap: break-word; }
+.flow .node { flex: 1 1 0; min-width: 0; }
+/* In a table with a recommended row, every first cell has the room the highlight bar takes. */
+table.picks td:first-child { padding-left: 2.5mm; }
+tr.pick td { border-bottom-color: #abefc6; }
+/* The same columns in every task table and every context table, so they line up page after page. */
+table.tasks { table-layout: fixed; }
+table.tasks th:nth-child(1) { width: 15mm; } table.tasks th:nth-child(3) { width: 24mm; } table.tasks th:nth-child(4) { width: 26mm; }
+table.rows { table-layout: fixed; } table.rows td:first-child { width: 34mm; }
+table + .next { border-top: 0; padding-top: 0; }
+.fb { margin: 0 .5pt; }
+h1, h2 { text-wrap: balance; }
+table.ref th:nth-child(3) { width: 36mm; }
+tr.plan td { padding-top: 3.5mm; border-bottom: 1.2pt solid var(--line); color: var(--ink); }
+.glance td:first-child, .glance th:first-child { width: 8mm; white-space: nowrap; }
+tbody.plan { break-inside: avoid; }

@@ -1,0 +1,387 @@
+/* Report design system.
+   - Margins: 20 mm, wider than a letter, because white margins help comprehension.
+   - Type: IBM Plex Serif for headings over IBM Plex Sans for text. A superfamily pair: designed to sit together, with
+     matching x-heights, and the serif/sans contrast makes headings stand out from text at a glance.
+   - Type scale: major third (1.25) from a 10 pt body: 8 / 9 / 10 / 12.5 / 15.5 / 19.5 / 24 pt.
+   - Spacing: a 4 pt grid (4, 8, 12, 16, 24, 32, 48). Inside a block 4–8, between blocks 16–24, between groups 32–48.
+     Headings sit closer to what they introduce than to what came before.
+   - Colour, 60-30-10: white page; neutral ink, greys and tinted surfaces; one accent (the brand colour when it is dark
+     enough to read) for structure. Green, red, orange and amber only carry meaning: recommended, cost, severity. */
+
+@page {
+  size: A4; margin: 20mm 20mm 22mm;
+  @bottom-right { content: counter(page); font: 8pt "IBM Plex Sans", "Segoe UI", Arial, sans-serif; color: #667085; }
+  @bottom-left { font: 8pt "IBM Plex Sans", "Segoe UI", Arial, sans-serif; color: #667085; }
+}
+/* The first page has no side or top margins so the band runs edge to edge; its content is padded instead. Chrome
+   does not paint into page margins, so a band with negative margins would be clipped. */
+@page :first { margin: 0 0 16mm; @bottom-left { content: none; } @bottom-right { content: none; } }
+
+:root {
+  --ink: #1d2433;
+  --body: #344054;
+  --muted: #667085;
+  --line: #e4e7ec;
+  --surface: #f6f7f9;
+  --accent: #1f2937;
+  --accent-soft: color-mix(in srgb, var(--accent) 6%, #ffffff);
+  --good: #067647;
+  --good-soft: #ecfdf3;
+  --bad-soft: #fef3f2;
+  --critical: #b42318;
+  --high: #c4320a;
+  --medium: #b54708;
+  --low: #475467;
+  --check: #175cd3;
+  --check-soft: #eff4ff;
+
+  --sans: "IBM Plex Sans", "Segoe UI", -apple-system, Roboto, Arial, sans-serif;
+  --serif: "IBM Plex Serif", Georgia, "Times New Roman", serif;
+  --t-xs: 8pt;
+  --t-sm: 9pt;
+  --t-body: 10pt;
+  --t-md: 12.5pt;
+  --t-lg: 15.5pt;
+  --t-xl: 19.5pt;
+  --t-2xl: 24pt;
+
+  --sp-1: 4pt;
+  --sp-2: 8pt;
+  --sp-3: 12pt;
+  --sp-4: 16pt;
+  --sp-5: 24pt;
+  --sp-6: 32pt;
+  --sp-7: 48pt;
+  --radius: 6pt;
+  --prose: 140mm;
+}
+
+* { box-sizing: border-box; }
+html { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+body { margin: 0; font-family: var(--sans); font-size: var(--t-body); line-height: 1.55; color: var(--body); font-variant-numeric: tabular-nums; }
+h1, h2, h3 { font-family: var(--serif); color: var(--ink); font-weight: 600; line-height: 1.2; break-after: avoid; }
+h2 { font-size: var(--t-2xl); margin: 0 0 var(--sp-2); }
+h3 { font-size: var(--t-lg); margin: var(--sp-6) 0 var(--sp-2); }
+h4 { font-family: var(--sans); font-size: var(--t-xs); font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); margin: 0 0 var(--sp-2); break-after: avoid; }
+p { margin: 0 0 var(--sp-2); }
+strong { color: var(--ink); font-weight: 600; }
+ul, ol { margin: 0; padding-left: 14pt; }
+li { margin: 0 0 var(--sp-1); }
+.lead { font-size: 11pt; line-height: 1.55; color: var(--muted); max-width: var(--prose); margin: 0 0 var(--sp-6); }
+.meta { color: var(--muted); font-size: var(--t-sm); }
+
+/* Each part starts on a new page with an accent bar, so it is easy to find when leafing through. */
+.guide-page, .serious, .decisions, .workflow, .themes, .plan, .register, .toolkit, .appendix { break-before: page; }
+/* The accent rule belongs to its heading: the two never part at a page break. */
+section > h2 { break-inside: avoid; }
+section > h2::before { content: ""; display: block; width: 18mm; height: 3pt; margin-bottom: var(--sp-3); background: var(--accent); }
+
+/* ---- First page ---- */
+.band {
+  padding: 14mm 20mm 12mm; display: flex; align-items: flex-end; justify-content: space-between; gap: 10mm;
+  background: var(--band-bg); color: var(--band-fg); font-family: var(--band-font, var(--sans));
+}
+.band-logo { max-width: 60mm; max-height: 16mm; object-fit: contain; }
+.band-name { font-family: var(--band-font, var(--serif)); font-size: var(--t-2xl); line-height: 1.1; margin: 0; color: inherit; }
+.band-meta { margin: 0; display: flex; flex-direction: column; align-items: flex-end; font-size: var(--t-sm); opacity: 0.85; }
+.band-meta span:first-child { text-transform: uppercase; letter-spacing: 0.12em; font-size: var(--t-xs); }
+
+.glance { padding: 10mm 20mm 0; }
+.glance-head { display: flex; gap: 8mm; align-items: flex-start; }
+.score { flex: none; display: grid; grid-template-columns: auto auto; align-items: baseline; padding: var(--sp-2) var(--sp-4) var(--sp-3); background: var(--accent-soft); border-radius: var(--radius); }
+.score-num { font-family: var(--serif); font-size: 36pt; font-weight: 600; line-height: 1; color: var(--accent); }
+.score-of { color: var(--muted); font-size: 11pt; }
+.score-label { grid-column: 1 / 3; color: var(--muted); font-size: var(--t-xs); text-transform: uppercase; letter-spacing: 0.08em; margin-top: var(--sp-1); }
+.verdict { font-size: 11pt; line-height: 1.6; color: var(--ink); margin: 0; max-width: var(--prose); }
+.counts { display: flex; flex-wrap: wrap; gap: var(--sp-2); margin: var(--sp-4) 0 0; }
+/* A chip never wraps inside, so a row of chips cannot grow into the rule of the block below it. */
+.count { border-radius: 10pt; padding: 2pt 10pt; background: var(--surface); color: var(--muted); font-size: var(--t-sm); white-space: nowrap; }
+.count b { font-size: var(--t-body); }
+.count-critical b { color: var(--critical); }
+.count-high b { color: var(--high); }
+.count-medium b { color: var(--medium); }
+.count-low b { color: var(--low); }
+.count-check { background: var(--check-soft); }
+.count-check b { color: var(--check); }
+
+/* Rows stay whole rather than the whole box: an unbreakable box this tall is pushed off the first page even when it fits. */
+.guide { margin-top: var(--sp-4); padding: var(--sp-3) var(--sp-5) var(--sp-3); background: var(--surface); border-radius: var(--radius); }
+.guide > *, .contents li { break-inside: avoid; }
+.guide h2 { font-size: var(--t-md); margin: 0 0 var(--sp-3); }
+.guide h3 { font-family: var(--sans); font-size: var(--t-body); margin: var(--sp-3) 0 var(--sp-1); }
+.guide p { margin: 0; }
+.guide p, .guide td { font-size: var(--t-sm); line-height: 1.45; }
+.contents { list-style: none; padding: 0; margin: 0; display: grid; grid-template-columns: 50mm 1fr; column-gap: 4mm; }
+.contents li { display: contents; }
+.contents strong, .contents span { padding: 2pt 0; border-bottom: 1px solid var(--line); font-size: var(--t-sm); line-height: 1.4; }
+.sev-key { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6mm; }
+.sev-key p { margin-top: var(--sp-1); font-size: 8.5pt; line-height: 1.4; }
+
+.effort-key { display: grid; grid-template-columns: repeat(var(--cols, 4), 1fr); gap: 5mm; }
+.effort-key p { margin-top: var(--sp-1); font-size: 8.5pt; line-height: 1.4; }
+.guide .key-line { margin-top: var(--sp-3); }
+.guide .key-line .tag { margin-right: var(--sp-1); }
+.guide .h-note { font-weight: 400; color: var(--muted); font-size: 8.5pt; margin-left: var(--sp-1); }
+
+.guide-page .guide { margin-top: 0; }
+
+/* Without a synthesis: the most serious problems. */
+.serious-list li { margin: 0 0 var(--sp-3); }
+.serious-list span { display: block; color: var(--muted); font-size: var(--t-sm); }
+
+/* ---- Tables ---- */
+table { width: 100%; border-collapse: collapse; margin: 0 0 var(--sp-4); font-size: 9.5pt; line-height: 1.45; }
+th { text-align: left; font-size: var(--t-xs); text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); font-weight: 600; padding: 0 var(--sp-3) var(--sp-2); border-bottom: 1.5pt solid var(--ink); }
+td { text-align: left; padding: var(--sp-3); border-bottom: 1px solid var(--line); vertical-align: top; }
+tr { break-inside: avoid; }
+/* The last row of a list of problems never stands alone on a page. */
+.issues tbody tr:last-child { break-before: avoid; }
+
+/* ---- Decisions ----
+   The problem and its cost, the options, then the recommendation. Decisions follow each other with wide space and a
+   rule instead of page breaks, so a long one does not leave a half-empty page. The top of a decision stays together,
+   so a decision never starts at the foot of a page. */
+.decision + .decision { margin-top: var(--sp-7); padding-top: var(--sp-5); border-top: 1px solid var(--line); }
+/* The heading stays with the first box. The boxes are stacked full width and each stays whole: side-by-side boxes
+   cannot break across pages, and keeping the whole top together left a third of a page empty before each decision. */
+.d-head { break-after: avoid; }
+.decision .split { display: block; break-inside: auto; }
+.decision .split > * + * { margin-top: var(--sp-3); }
+.decision .panel { break-inside: avoid; }
+.d-head { display: flex; gap: var(--sp-3); align-items: flex-start; margin-bottom: var(--sp-4); }
+.d-head .num { flex: none; width: 22pt; height: 22pt; margin-top: 1pt; border-radius: 50%; background: var(--accent); color: #fff; font-family: var(--sans); font-size: 10pt; font-weight: 600; display: inline-flex; align-items: center; justify-content: center; }
+.d-head h3 { margin: 0; font-size: var(--t-xl); }
+.d-meta { margin: var(--sp-1) 0 0; color: var(--muted); font-size: var(--t-sm); line-height: 1.8; }
+.d-meta .effort { vertical-align: 1px; }
+.split { display: grid; grid-template-columns: 1fr 1fr; gap: var(--sp-4); margin-bottom: var(--sp-5); break-inside: avoid; }
+.panel { padding: var(--sp-4) var(--sp-4) var(--sp-2); border-radius: var(--radius); }
+.panel-found { background: var(--surface); }
+.panel-cost { background: var(--bad-soft); }
+.panel-cost h4 { color: var(--critical); }
+.costs li { margin: 0 0 var(--sp-2); }
+.costs li::marker { color: var(--high); }
+
+.options td { padding: var(--sp-3); }
+.options td:first-child { width: 46%; }
+.options td p { margin: var(--sp-1) 0 0; }
+.options .size { color: var(--muted); font-size: var(--t-xs); margin-top: var(--sp-2); }
+/* The highlight is painted on the row, so it covers every cell evenly up to the rules above and below. */
+.options tr.recommended { background: var(--good-soft); }
+/* A real border, not an inset shadow: a shadow on one cell breaks the row rules above and below it. */
+.options tr.recommended td:first-child { border-left: 3pt solid var(--good); }
+.options li { margin: 0 0 var(--sp-1); }
+.pros li::marker { color: var(--good); }
+.cons li::marker { color: var(--critical); }
+.pill { font-size: 7pt; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; padding: 1pt 5pt; border-radius: 3pt; color: #fff; background: var(--good); white-space: nowrap; vertical-align: 1pt; }
+.because { padding: var(--sp-4) var(--sp-5) var(--sp-2); border-radius: var(--radius); background: var(--good-soft); break-inside: avoid; }
+.because h4 { color: var(--good); font-size: var(--t-body); text-transform: none; letter-spacing: 0; }
+.because p { max-width: var(--prose); color: var(--ink); }
+
+/* ---- Workflow: today, then the proposal, each a full-width table whose rows break cleanly across pages ---- */
+.workflow h3 { margin-top: var(--sp-6); }
+.flow-table { font-size: var(--t-body); margin-bottom: var(--sp-2); }
+.flow-table td { padding: 10pt var(--sp-3); }
+.flow-table td:nth-child(2) { width: 52%; color: var(--ink); }
+.flow-table .n { width: 10mm; text-align: center; padding-left: 0; padding-right: 0; }
+.flow-table td.n { font-weight: 600; color: var(--muted); }
+.flow-table td.n.weak { color: var(--critical); background: var(--bad-soft); box-shadow: inset 3pt 0 0 var(--high); }
+.flow-table td.note, .flow-table span.note { color: var(--muted); font-size: var(--t-sm); }
+.flow-table span.note { display: block; margin-top: var(--sp-1); }
+.tool-chip { display: inline-block; font-size: var(--t-xs); line-height: 1.4; color: var(--accent); background: var(--accent-soft); border-radius: 3pt; padding: 2pt 6pt; }
+.tool-chip b { text-transform: uppercase; letter-spacing: 0.06em; margin-right: 3pt; }
+.workflow .meta { max-width: var(--prose); }
+
+/* ---- Other problems: one card per group ---- */
+.theme { margin: 0 0 var(--sp-4); padding: var(--sp-4) var(--sp-5) var(--sp-2); background: var(--surface); border-radius: var(--radius); break-inside: avoid; }
+.theme h3 { margin: 0 0 var(--sp-1); font-size: var(--t-md); }
+.theme-meta { color: var(--muted); font-size: var(--t-sm); margin-bottom: var(--sp-3); }
+.theme p:last-child { max-width: var(--prose); }
+
+/* ---- Register: area scores, then one row per problem with its own explanation ---- */
+.scores { margin-bottom: 0; }
+.scores td { padding: var(--sp-2) var(--sp-3); vertical-align: middle; }
+.scores .bar-cell { width: 45%; }
+.bar { display: block; height: 6pt; background: var(--surface); border-radius: 3pt; overflow: hidden; }
+.bar-fill { display: block; height: 100%; background: var(--accent); border-radius: 3pt; }
+th.num, td.num { text-align: right; width: 18mm; }
+.reg-area h3 { display: flex; align-items: baseline; justify-content: space-between; gap: var(--sp-3); margin: var(--sp-7) 0 0; padding-bottom: var(--sp-2); border-bottom: 1.5pt solid var(--ink); }
+.area-score { font-family: var(--sans); font-size: var(--t-sm); font-weight: 400; color: var(--muted); }
+.issues { margin: 0; }
+.issues td { padding: var(--sp-4) var(--sp-3) var(--sp-4) 0; }
+.issues td.sev { width: 20mm; padding-top: calc(var(--sp-4) + 1pt); }
+.issues strong { display: block; font-size: 10.5pt; line-height: 1.4; }
+.issues .why { display: block; margin-top: var(--sp-1); max-width: var(--prose); }
+.issues .see { display: inline-block; margin-top: var(--sp-2); padding: 1pt 6pt; border-radius: 3pt; background: var(--accent-soft); color: var(--accent); font-size: var(--t-xs); }
+.badge { font-size: 7pt; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; padding: 2pt 5pt; border-radius: 3pt; color: #fff; background: var(--low); white-space: nowrap; }
+.badge-critical { background: var(--critical); }
+.badge-high { background: var(--high); }
+.badge-medium { background: var(--medium); }
+.tag.tag-check { color: var(--check); background: var(--check-soft); }
+.issues .confirm { display: block; margin-top: var(--sp-2); padding: var(--sp-1) var(--sp-2); border-left: 2pt solid var(--check); background: var(--check-soft); font-size: var(--t-sm); max-width: var(--prose); }
+.issues .confirm b { color: var(--check); }
+.tag { font-size: 7pt; text-transform: uppercase; letter-spacing: 0.06em; padding: 1pt 5pt; border-radius: 3pt; background: var(--surface); color: var(--muted); font-weight: 600; white-space: nowrap; vertical-align: 1pt; }
+
+/* ---- Effort: one neutral scale, so it never reads as severity ---- */
+.effort { display: inline-block; font-size: 7pt; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; padding: 1pt 6pt; border-radius: 3pt; border: 1px solid var(--line); color: var(--ink); background: #fff; white-space: nowrap; }
+.effort-quick { background: var(--surface); }
+.effort-small { background: var(--accent-soft); }
+.effort-medium { background: color-mix(in srgb, var(--accent) 16%, #ffffff); }
+.effort-large { background: color-mix(in srgb, var(--accent) 30%, #ffffff); }
+.effort-after-check { color: var(--check); background: var(--check-soft); border-color: color-mix(in srgb, var(--check) 30%, #ffffff); }
+
+/* ---- Plan: stages in order, one full-width table per stage whose rows break cleanly across pages ---- */
+.stage { margin-top: var(--sp-6); }
+.stage h3 { margin: 0 0 var(--sp-1); }
+.stage-n { display: block; font-family: var(--sans); font-size: var(--t-xs); font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; color: var(--accent); margin-bottom: 2pt; }
+.stage-goal { color: var(--muted); max-width: var(--prose); margin-bottom: var(--sp-3); }
+.plan-table { margin-bottom: 0; }
+.plan-table td { padding: var(--sp-3); }
+.plan-table .n { width: 8mm; text-align: center; padding-left: 0; padding-right: 0; }
+.plan-table td.n { font-weight: 600; color: var(--muted); }
+.plan-table td:nth-child(2) { width: 52%; }
+.plan-table td p { margin: var(--sp-1) 0 0; }
+.plan-table strong { display: block; margin-top: var(--sp-1); font-size: 10.5pt; line-height: 1.4; }
+.plan-table .after { color: var(--muted); font-size: var(--t-sm); }
+.plan-table tr.check td.n { color: var(--check); box-shadow: inset 3pt 0 0 var(--check); background: var(--check-soft); }
+.effort-cell { width: 20%; }
+.effort-cell p, .plan-table .who { font-size: var(--t-sm); color: var(--body); }
+.plan-table .who p { margin: 0 0 var(--sp-1); color: var(--ink); font-weight: 600; }
+.needs { padding-left: 11pt; }
+.needs li { margin: 0 0 2pt; }
+.step-kind { display: inline-block; font-size: 7pt; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; padding: 1pt 5pt; border-radius: 3pt; }
+.step-check { color: var(--check); background: var(--check-soft); }
+.step-work { color: var(--muted); background: var(--surface); }
+.plan-index td { padding: var(--sp-2) var(--sp-3) var(--sp-2) 0; }
+.plan-index th { padding-left: 0; }
+.plan-index td.refs { width: 40mm; color: var(--muted); font-size: var(--t-sm); }
+.plan > h3 { margin-top: var(--sp-6); }
+.plan-table .deals { color: var(--accent); font-size: var(--t-sm); }
+
+/* ---- Plan document, first page: why this order, then the stages at a glance ---- */
+.plan-glance .verdict { margin-bottom: var(--sp-4); }
+/* Two columns, so the stages and the reading guide share the first page. The grid comes first: a grid that reaches
+   the foot of the first page makes Chrome shrink the whole page to fit it. */
+.stage-list { list-style: none; padding: 0; margin: var(--sp-4) 0 0; display: grid; grid-template-columns: 1fr 1fr; column-gap: 8mm; }
+.stage-list li { margin: 0; padding: var(--sp-2) 0; border-top: 1px solid var(--line); break-inside: avoid; }
+/* In the plan and the roadmap the guide opens the second page and the first section follows it on the same page. */
+.lead-in .guide { break-inside: avoid; }
+.lead-in + section { break-before: auto; margin-top: var(--sp-7); }
+.stage-list p { font-size: var(--t-sm); line-height: 1.45; }
+.stage-list strong { display: block; font-family: var(--serif); font-size: var(--t-md); }
+.stage-list p { margin: var(--sp-1) 0 0; max-width: var(--prose); }
+/* Effort badges wrap as a row of chips with room between the lines. */
+.stage-list .meta { display: flex; flex-wrap: wrap; align-items: center; gap: 4pt 4pt; }
+
+/* ---- Implementation roadmap: the team, then one section per phase with a card per solution ---- */
+.rm-team, .rm-phase, .rm-declined, .rm-trace { break-before: page; }
+.rm-team .rm-sub { margin-top: var(--sp-7); }
+.rm-phase > h2 .stage-n { font-size: var(--t-sm); margin-bottom: var(--sp-1); }
+/* Space, not a rule, separates solutions: a rule is left stray at the top of a page when a solution starts there. */
+.solution + .solution { margin-top: var(--sp-7); }
+/* A solution may run across pages: long problem lists and closing blocks flow on instead of jumping to a new page and
+   leaving one heading behind. Headings stay with what follows them. */
+.solution .d-top, .solution .split, .solution .rm-done { break-inside: auto; }
+/* Side-by-side columns cannot break across pages: the shorter one is stretched into an empty box on the next page.
+   In a solution the blocks are stacked full width instead, and the short problem box stays whole. */
+.solution .split { display: block; }
+.solution .split > * + * { margin-top: var(--sp-4); }
+.solution .panel-found { break-inside: avoid; }
+.solution .panel { box-decoration-break: clone; -webkit-box-decoration-break: clone; }
+.solution .d-head, .rm-phase > h2, .rm-phase > .lead { break-inside: avoid; break-after: avoid; }
+.solution .resolves li, .solution .criteria li { break-inside: avoid; }
+/* The first and the last item of a list never stand alone on a page. */
+.resolves li:nth-child(2), .resolves li:last-child, .criteria li:nth-child(2), .criteria li:last-child, .solution > ul li:last-child { break-before: avoid; }
+/* Later phases, and the backlog after the discarded list, follow on the same page rather than leaving a page mostly
+   empty; the heading rule still marks where each one starts. */
+.rm-phase + .rm-phase, .rm-declined + .rm-declined, .rm-phase + .rm-declined { break-before: auto; margin-top: var(--sp-7); }
+.sid { flex: none; min-width: 26pt; height: 22pt; padding: 0 6pt; margin-top: 1pt; border-radius: 11pt; background: var(--accent); color: #fff; font-size: 9pt; font-weight: 600; display: inline-flex; align-items: center; justify-content: center; }
+.resolves { list-style: none; padding: 0; font-size: var(--t-sm); }
+.resolves li { margin: 0 0 var(--sp-2); }
+.resolves .badge, .resolves > li > .tag:first-child { margin-right: 3pt; }
+.rm-h { margin-top: var(--sp-5); }
+.approach { max-width: var(--prose); }
+.task-table td:nth-child(2) { width: 56%; }
+.task-table td.n { font-size: var(--t-xs); width: 12mm; padding-left: 6pt; padding-right: 2pt; text-align: left; white-space: nowrap; }
+/* The owner's plan has a wider column for what each step needs, in place of the roadmap's names. */
+/* The list of what the work needs follows the last fix instead of opening a page of its own. */
+.plan-needs { margin-top: var(--sp-7); }
+.plan-steps td:nth-child(2) { width: 48%; }
+.plan-steps td.who { width: 25%; }
+.plan-steps td.effort-cell { width: 21%; }
+.task-table .files code { font-size: var(--t-xs); background: var(--surface); border-radius: 2pt; padding: 0 3pt; margin-right: 2pt; overflow-wrap: anywhere; }
+.rm-done { margin-top: var(--sp-4); }
+.rm-done ul + h4 { margin-top: var(--sp-5); }
+.routes { table-layout: fixed; }
+.flow-step { margin: var(--sp-5) 0 var(--sp-2); font-size: var(--t-sm); color: var(--ink); break-after: avoid; }
+.flow-step .why { color: var(--muted); font-weight: 400; margin-left: var(--sp-2); }
+.fork { table-layout: fixed; }
+.fork td { vertical-align: top; width: 50%; }
+.fork tr { break-inside: auto; }
+.fork th.recommended { background: var(--good-soft); }
+.fork-task { padding: var(--sp-2) 0; border-bottom: 0.5pt solid var(--surface); break-inside: avoid; }
+.fork-task:last-child { border-bottom: 0; }
+.fork-task p { margin: var(--sp-1) 0 0; font-size: var(--t-sm); }
+.fork-task .fork-head { margin: 0; font-size: 10pt; }
+.fork-task .fork-head .n { color: var(--muted); font-size: var(--t-xs); margin-right: var(--sp-1); }
+.fork-task .fork-who { color: var(--ink); font-weight: 600; line-height: 1.7; }
+.fork-task .fork-who .why { font-weight: 400; color: var(--body); }
+.fork-task .fork-head .n { white-space: nowrap; }
+.checklist { margin: var(--sp-2) 0 0; font-size: var(--t-sm); }
+.checklist th, .checklist td { padding: var(--sp-1) var(--sp-2); vertical-align: top; }
+.checklist td:first-child { width: 40%; }
+.checklist td:nth-child(2) { width: 24%; }
+.checklist-block { margin: var(--sp-3) 0 var(--sp-4) 12mm; }
+.checklist-block .cl-title { margin: 0 0 var(--sp-1); font-size: var(--t-xs); font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); break-after: avoid; }
+.checklist-block .checklist { margin: 0; }
+.routes th:first-child, .routes td:first-child { width: 28%; }
+.route-summary { font-size: var(--t-sm); margin: 0 0 var(--sp-3); }
+.routes td.route ul { margin: 0; padding-left: var(--sp-4); font-size: var(--t-sm); }
+.routes td.route p { margin: var(--sp-1) 0 0; font-size: var(--t-sm); }
+.routes th.recommended { background: var(--good-soft); }
+.routes tr.route-total td { border-top: 1.5pt solid var(--ink); }
+.criteria { list-style: none; padding: 0; }
+/* "Done when" is a short list: it stays whole with its heading rather than leaving one item alone on the next page. */
+.rm-done > div { break-inside: avoid; }
+.criteria li { padding-left: 1.2em; text-indent: -1.2em; }
+.criteria li::before { content: "☐ "; color: var(--good); }
+.rm-area-h { margin: var(--sp-6) 0 var(--sp-1); font-size: var(--t-md); }
+/* Fixed columns, so the per-area tables line up with each other. */
+.trace { margin-bottom: 0; table-layout: fixed; }
+.trace th:first-child { width: 20mm; }
+.trace th:nth-child(3) { width: 36%; }
+.trace td { padding: var(--sp-2) var(--sp-3) var(--sp-2) 0; }
+.rm-foot { margin-top: var(--sp-6); }
+
+/* ---- AI toolkit: what each kind of tool is, then one card per tool ---- */
+.kind { display: inline-block; font-size: 7pt; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; color: #fff; background: var(--accent); border-radius: 3pt; padding: 2pt 6pt; white-space: nowrap; }
+.kind-plain { color: var(--muted); font-size: var(--t-sm); }
+.kinds { display: grid; grid-template-columns: 44mm 1fr; gap: var(--sp-3) 6mm; margin: 0 0 var(--sp-2); padding: var(--sp-4) var(--sp-5); background: var(--accent-soft); border-radius: var(--radius); font-size: 9.5pt; }
+.kinds dt { display: flex; flex-direction: column; align-items: flex-start; gap: 2pt; }
+.kinds dd { margin: 0; }
+/* A card stays whole: its label, title and rows sit in a grid that cannot break cleanly across pages. */
+.tool { margin: 0 0 var(--sp-4); padding: var(--sp-4) var(--sp-5) var(--sp-3); border: 1px solid var(--line); border-radius: var(--radius); break-inside: avoid; }
+.tool header { margin-bottom: var(--sp-3); }
+.tool-kind { margin: 0 0 var(--sp-1); color: var(--muted); font-size: var(--t-sm); }
+.tool-kind .kind { margin-right: var(--sp-1); }
+.tool h4 { margin: 0; font-family: var(--serif); font-size: var(--t-md); font-weight: 600; text-transform: none; letter-spacing: 0; color: var(--ink); }
+.tool dl { display: grid; grid-template-columns: 34mm 1fr; gap: var(--sp-2) 6mm; margin: 0; font-size: 9.5pt; }
+.tool dt { color: var(--muted); font-size: var(--t-xs); font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; padding-top: 2pt; }
+.tool dd { margin: 0; }
+
+/* ---- Glossary and notes ---- */
+.appendix td { padding: var(--sp-1) var(--sp-3) var(--sp-1) 0; }
+.appendix ul { padding-left: 14pt; font-size: 9.5pt; margin-bottom: var(--sp-4); }
+.appendix p { max-width: var(--prose); }
+.glossary { display: grid; grid-template-columns: 42mm 1fr; gap: var(--sp-2) var(--sp-3); margin: 0 0 var(--sp-2); font-size: 9.5pt; }
+.glossary dt { font-weight: 600; color: var(--ink); }
+.glossary dd { margin: 0; }
+.glossary dt .why { display: block; font-weight: 400; color: var(--muted); font-size: var(--t-xs); }
+
+/* Several problems in one backlog or discarded entry each start on their own line. */
+.dl-item { display: block; margin-top: var(--sp-1); }
+/* A task table that resumes after a checklist starts with room above its repeated head. */
+.task-table.cont { margin-top: var(--sp-5); }
+/* Headings line up with the text of their column (the cells of these tables have no left padding). */
+.issues th { padding-left: 0; }
+/* A section heading and its lead stay with the start of the table they introduce. */
+.rm-declined > h2, .rm-declined > .lead { break-after: avoid; }

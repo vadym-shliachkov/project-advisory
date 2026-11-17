@@ -1,0 +1,6 @@
+{
+  "name": "council",
+  "version": "0.1.0",
+  "description": "A weekly council of role agents that proposes ideas for growing a project, tries to kill them, and reports the ones that survive, with the debate written up as a library conversation.",
+  "skills": "./skills/"
+}

@@ -1,0 +1,571 @@
+import path from 'node:path';
+import { readJson, writeJson } from './io.mjs';
+import { MAX_ROUNDS, debateAllowance, proposers, seat, takeTurn, turnTaken } from './session.mjs';
+import { applyIdeas } from './ideas.mjs';
+import { survivors, finalise } from './verdict.mjs';
+
+// The record of a session: every hypothesis, restatement, attack, reply and ruling, numbered in the order it was
+// saved. It is the only source for both documents, and the place where the limits of the debate are enforced: who
+// may speak when, how many rounds a thread may run, and that a later round must bring something new.
+
+export const recordPath = (dir) => path.join(dir, 'record.json');
+export const loadRecord = (dir) => readJson(recordPath(dir), null) ?? { statements: [], threads: [], docket: null, questions: [] };
+export const saveRecord = (dir, record) => writeJson(recordPath(dir), record);
+
+export const ATTACK_KINDS = {
+  evidence: 'the evidence is weak or reads another way',
+  cost: 'it costs more than it returns',
+  customer: 'the customer does not care',
+  exists: 'it exists already or was tried',
+  harm: 'it harms something else',
+  'do-nothing': 'leaving things as they are does as well',
+};
+const STANCES = ['refute', 'narrow', 'concede'];
+const HYPOTHESIS_PARTS = ['change', 'effect', 'because', 'trigger', 'killCondition'];
+const TEST_PARTS = ['what', 'metric', 'threshold', 'checkAfter'];
+// What a proposer's narrower claim may carry: the claim, and the test that can read it when the one first proposed
+// cannot. Never the kill condition: a proposer does not move its own. The judge sets the one that fits the smaller
+// form when it rules (see verdict.mjs).
+const NARROW_PARTS = ['change', 'effect', 'test'];
+const MAX_PER_ROLE = 4;
+// How far an idea reaches: a change to what is there, something new beside it, a remake of what is there (the site,
+// the position, the offer), or something the business does not do or have at all (a product, a tool, a channel, a
+// partnership, an audience). Left to themselves, proposers who start from what they saw on a page propose only the
+// first kind; required to bring a direction, they remade the site and still created nothing. So every proposer
+// brings at least one new thing; a direction is asked for, not enforced.
+export const SCALES = ['adjustment', 'addition', 'direction', 'new'];
+const SCALE_TEXT = 'adjustment (a change to what is there), addition (something new beside it), direction (a remake of what is there: the site, the position, the offer) or new (something the business does not do or have at all)';
+const TEXT_MIN = 20;
+const TEXT_MAX = 1200;
+
+const one = (s) => String(s ?? '').replace(/\s+/g, ' ').trim();
+const same = (a, b) => one(a).toLowerCase() === one(b).toLowerCase();
+const isOpen = (t) => t.status === 'admitted' && !t.closed;
+
+export const thread = (record, id) => record.threads.find((t) => t.id === id) ?? null;
+export const openThreads = (record) => record.threads.filter(isOpen);
+export const inThread = (record, id) => record.statements.filter((s) => s.thread === id);
+
+function textErrors(s, at, { field = 'text', min = TEXT_MIN, max = TEXT_MAX } = {}) {
+  const t = one(s[field]);
+  if (t.length < min) return [`${at}.${field}: at least ${min} characters are required`];
+  if (t.length > max) return [`${at}.${field}: at most ${max} characters; say it more briefly`];
+  return [];
+}
+
+// The test of a hypothesis, or of a narrower claim: what is done, what is read, the value that counts and when to look.
+export function testErrors(test, at) {
+  if (!test || typeof test !== 'object' || Array.isArray(test)) return [`${at}: say the cheapest way to find out (what, metric, threshold, checkAfter)`];
+  return TEST_PARTS.flatMap((part) => textErrors(test, at, { field: part, min: part === 'what' ? 10 : 2, max: 300 }));
+}
+const cleanTest = (test) => Object.fromEntries([...TEST_PARTS, 'baseline'].filter((k) => one(test[k])).map((k) => [k, one(test[k])]));
+
+// A question put to the proposer: raised on the thread by somebody else. The proposer's own questions go to the
+// person and change nothing in the debate.
+const putToProposer = (record, s) => s.type === 'question' && s.by !== thread(record, s.thread)?.by;
+// What a proposer may answer in a round: the attacks, the customer's voice and the questions put to it.
+const toAnswer = (record, id, round) => inThread(record, id).filter((s) => s.round === round && (['attack', 'client'].includes(s.type) || putToProposer(record, s)));
+
+function evidenceErrors(s, at, known) {
+  if (s.evidence === undefined) return [];
+  if (!Array.isArray(s.evidence)) return [`${at}.evidence: an array of evidence ids such as ["E3"] is required`];
+  return s.evidence.filter((id) => !known.has(id)).map((id) => `${at}.evidence: there is no evidence ${id}; add it with the evidence command first`);
+}
+
+// Evidence ids a statement cites that nobody in its thread has cited before.
+const freshEvidence = (record, s) => {
+  const used = new Set(inThread(record, s.thread).flatMap((x) => x.evidence ?? []));
+  return (s.evidence ?? []).filter((id) => !used.has(id));
+};
+
+const lastReply = (record, id, round) => inThread(record, id).find((s) => s.type === 'reply' && s.round === round) ?? null;
+
+function close(t, round, reason, extra = {}) {
+  if (!t.closed) t.closed = { round, reason, ...extra };
+}
+
+// Who attacks a thread besides the red team: one other proposing role, never its own proposer and never the client
+// (who speaks for the customer on every thread), spread evenly.
+export function assignAttackers(session, record) {
+  const pool = proposers(session).filter((r) => r !== 'client');
+  const load = Object.fromEntries(pool.map((r) => [r, 0]));
+  const out = {};
+  openThreads(record).forEach((t, n) => {
+    const candidates = pool.filter((r) => r !== t.by);
+    if (!candidates.length) return;
+    const fewest = Math.min(...candidates.map((r) => load[r]));
+    const rotated = [...candidates.slice(n % candidates.length), ...candidates.slice(0, n % candidates.length)];
+    const pick = rotated.find((r) => load[r] === fewest);
+    out[t.id] = pick;
+    load[pick] += 1;
+  });
+  return out;
+}
+
+// The threads a role speaks on in the current step, and so whether it has a turn at all.
+// In round one a seat is given every idea that is not its own. The assignment only says which ideas it must cover;
+// on the others it speaks when its ground sees what nobody else at the table will (the competitor seat on an idea
+// that breaks a habit every rival keeps). Handed only its share, the seat that knew the decisive fact never saw the
+// idea it decided.
+export function threadsFor(session, record, role) {
+  const open = openThreads(record);
+  if (session.phase === 'propose') return [];
+  if (session.phase !== 'examine') return [];
+  if (session.step === 'attack') {
+    if (role === 'red-team') return open;
+    if (session.round > 1) return [];
+    if (role === 'client') return open.filter((t) => t.by !== 'client');
+    if (!proposers(session).includes(role)) return [];
+    return open.filter((t) => t.by !== role);
+  }
+  return open.filter((t) => t.by === role && toAnswer(record, t.id, session.round).length);
+}
+
+// The roles whose turn it is in the current step.
+export function turns(session, record, verdicts = null) {
+  const list = [];
+  const add = (role, threads = [], extra = {}) => {
+    const s = seat(session, role);
+    list.push({ role, name: s?.name ?? role, model: s?.model ?? 'standard', threads: threads.map((t) => t.id), done: turnTaken(session, role), ...extra });
+  };
+  if (session.phase === 'evidence') add('competitors', [], { optional: true });
+  if (session.phase === 'propose') for (const role of proposers(session)) add(role);
+  if (session.phase === 'docket' || session.phase === 'verdict') add('judge');
+  if (session.phase === 'set') {
+    add('red-team');
+    // The judge looks again only when the red team asks for it.
+    if (verdicts?.set?.notes.some((n) => n.asksRuling)) list.push({ ...list.pop(), done: true }, { role: 'judge', name: seat(session, 'judge')?.name ?? 'judge', model: seat(session, 'judge')?.model ?? 'standard', threads: [], done: Boolean(verdicts.set.changes) });
+  }
+  if (session.phase === 'examine') {
+    const roles = session.step === 'attack' ? ['red-team', 'client', ...proposers(session).filter((r) => r !== 'client')] : proposers(session);
+    for (const role of roles) {
+      const mine = threadsFor(session, record, role);
+      if (mine.length) add(role, mine);
+    }
+  }
+  // The debate cannot start more members than it has runs left (context refuses the rest), so no more turns not yet
+  // taken are listed than that, in the order above: the session moves on with what was said. A member already started
+  // was paid for and stays listed until it saves. The judge's docket is never dropped.
+  if (!SPENDING.includes(session.phase)) return list;
+  let room = Math.max(0, debateAllowance(session) - session.runs);
+  return list.filter((t) => t.done || t.role === 'judge' || started(session, t.role) || room-- > 0);
+}
+
+const SPENDING = ['evidence', 'propose', 'examine'];
+export const debateSpent = (session) => SPENDING.includes(session.phase) && session.runs >= debateAllowance(session);
+// Whether a role's context for the current step was printed already, and so its run counted.
+const started = (session, role) => (session.log ?? []).some((l) => l.role === role && l.phase === session.phase && l.round === session.round && l.step === session.step);
+
+// ---- Saving statements ----
+
+function checkHypothesis(s, at, ctx, role) {
+  const { session } = ctx;
+  const errors = [];
+  if (session.phase !== 'propose') return [`${at}: hypotheses are proposed in the propose phase; the session is in ${session.phase}`];
+  if (!proposers(session).includes(role)) return [`${at}: ${role} does not propose ideas`];
+  errors.push(...textErrors(s, at, { field: 'title', min: 5, max: 90 }));
+  if (!s.hypothesis || typeof s.hypothesis !== 'object') return [...errors, `${at}.hypothesis: change, effect, because, trigger and killCondition are required`];
+  for (const part of HYPOTHESIS_PARTS) errors.push(...textErrors(s.hypothesis, `${at}.hypothesis`, { field: part, min: 10, max: 400 }));
+  for (const key of Object.keys(s.hypothesis)) if (!HYPOTHESIS_PARTS.includes(key)) errors.push(`${at}.hypothesis: unknown property "${key}"`);
+  errors.push(...testErrors(s.test, `${at}.test`));
+  if (!['small', 'medium', 'large'].includes(s.effort)) errors.push(`${at}.effort: small, medium or large`);
+  if (!SCALES.includes(s.scale)) errors.push(`${at}.scale: ${SCALE_TEXT}`);
+  if (s.returns !== undefined && !/^I\d{1,4}$/.test(s.returns)) errors.push(`${at}.returns: the ledger id of the idea this brings back, such as I7`);
+  if (s.returns && one(s.whatChanged).length < 10) errors.push(`${at}.whatChanged: say what is different since ${s.returns} was decided`);
+  return errors;
+}
+
+function checkAttackStep(s, at, ctx, role) {
+  const { session, record } = ctx;
+  const t = thread(record, s.thread);
+  const errors = [];
+  const mine = threadsFor(session, record, role).some((x) => x.id === s.thread);
+  if (!mine) {
+    const why = role === 'red-team' ? 'it is closed or was not admitted'
+      : session.round > 1 ? 'from round two only the red team presses a thread'
+        : 'it is closed, or it is your own idea';
+    return [`${at}: ${role} does not speak on ${s.thread} in this step: ${why}`];
+  }
+  if (s.type === 'client') {
+    if (role !== 'client') return [`${at}: only the client's voice gives a client statement`];
+    if (!['yes', 'no', 'unsure'].includes(s.cares)) errors.push(`${at}.cares: yes, no or unsure: would a customer notice or care?`);
+    if (inThread(record, s.thread).some((x) => x.type === 'client' && !same(x.text, s.text))) errors.push(`${at}: the client has already spoken on ${s.thread}`);
+    return errors;
+  }
+  if (role === 'client') return [`${at}: the client's voice gives a "client" statement, not a ${s.type}`];
+  if (s.type === 'steelman') {
+    if (session.round !== 1) return [`${at}: the restatement belongs to round one`];
+    if (inThread(record, s.thread).some((x) => x.type === 'steelman' && x.by === role && !same(x.text, s.text))) errors.push(`${at}: ${role} has already restated ${s.thread}`);
+    return errors;
+  }
+  // attack
+  if (!Object.hasOwn(ATTACK_KINDS, s.kind)) errors.push(`${at}.kind: one of ${Object.keys(ATTACK_KINDS).join(', ')}`);
+  if (role === 'red-team' && session.round === 1 && !ctx.pending.some((x) => x.type === 'steelman' && x.thread === s.thread)
+    && !inThread(record, s.thread).some((x) => x.type === 'steelman' && x.by === 'red-team')) {
+    errors.push(`${at}: restate ${t.id} in its strongest form first (a "steelman" statement before the attack)`);
+  }
+  return errors;
+}
+
+function checkReplyStep(s, at, ctx, role) {
+  const { session, record } = ctx;
+  const t = thread(record, s.thread);
+  const errors = [];
+  if (t.by !== role) return [`${at}: only ${t.by}, who proposed ${t.id}, replies on it`];
+  if (!isOpen(t)) return [`${at}: ${t.id} is closed (${t.closed?.reason ?? t.status})`];
+  if (s.type === 'steelman-reply') {
+    if (session.round !== 1) return [`${at}: the restatement is accepted or corrected in round one, once`];
+    if (typeof s.accepts !== 'boolean') errors.push(`${at}.accepts: true when the restatement is fair, false with a correction in "text"`);
+    if (inThread(record, s.thread).some((x) => x.type === 'steelman-reply' && !same(x.text, s.text))) errors.push(`${at}: the restatement of ${t.id} has already been answered`);
+    return errors;
+  }
+  // reply
+  if (!STANCES.includes(s.stance)) errors.push(`${at}.stance: refute, narrow or concede`);
+  const attacks = toAnswer(record, s.thread, session.round);
+  if (!attacks.length) errors.push(`${at}: nobody attacked ${t.id} in this round, so there is nothing to reply to`);
+  if (!Array.isArray(s.to) || !s.to.length) errors.push(`${at}.to: the numbers of the statements this answers, such as [14, 15]`);
+  else for (const n of s.to) if (!attacks.some((x) => x.n === n)) errors.push(`${at}.to: ${n} is not an attack on ${t.id} in this round`);
+  const earlier = lastReply(record, s.thread, session.round);
+  if (earlier && !same(earlier.text, s.text)) errors.push(`${at}: ${t.id} already has its reply for this round`);
+  if (s.stance === 'narrow') {
+    if (!s.narrowed || typeof s.narrowed !== 'object') errors.push(`${at}.narrowed: the narrower claim, as { "change", "effect" }`);
+    else {
+      for (const part of ['change', 'effect']) errors.push(...textErrors(s.narrowed, `${at}.narrowed`, { field: part, min: 10, max: 400 }));
+      // The test that reads the smaller claim is said in the open, where it can be attacked, not in passing in the text.
+      if (s.narrowed.test !== undefined) errors.push(...testErrors(s.narrowed.test, `${at}.narrowed.test`));
+      for (const key of Object.keys(s.narrowed)) {
+        if (key === 'killCondition') errors.push(`${at}.narrowed: the kill condition stays as it was proposed; you cannot move your own. When it no longer fits the smaller claim, say so in your text: the judge sets the one that does`);
+        else if (!NARROW_PARTS.includes(key)) errors.push(`${at}.narrowed: unknown property "${key}"; a narrower claim is "change" and "effect", with "test" when the smaller claim cannot be read by the test you proposed`);
+      }
+    }
+  } else if (s.narrowed !== undefined) errors.push(`${at}.narrowed: only a reply with the stance "narrow" carries a narrower claim`);
+  return errors;
+}
+
+// Saves one agent's statements. Either all of them are saved or none. A repeated statement (an agent that retries
+// its save) is accepted without being added, so it cannot spend a turn twice.
+export function say(ctx, role, statements, { now = () => new Date().toISOString() } = {}) {
+  const { session, record, evidence } = ctx;
+  const errors = [];
+  const warnings = [];
+  if (!seat(session, role)) return { errors: [`Unknown or missing --role "${role ?? ''}". The cast: ${session.cast.map((s) => s.role).join(', ')}`], warnings };
+  if (!Array.isArray(statements)) return { errors: ['$.statements: an array is required (it may be empty when you have nothing to say)'], warnings };
+  if (!['propose', 'examine'].includes(session.phase)) return { errors: [`Nothing is said in the ${session.phase} phase; see the status command for the next step`], warnings };
+  const known = new Set(evidence.entries.map((e) => e.id));
+  const types = session.phase === 'propose' ? ['hypothesis'] : session.step === 'attack' ? ['steelman', 'attack', 'client', 'question'] : ['steelman-reply', 'reply', 'question'];
+
+  const pending = [];
+  let repeated = 0;
+  statements.forEach((s, i) => {
+    const at = `$.statements[${i}]`;
+    if (!s || typeof s !== 'object' || Array.isArray(s)) { errors.push(`${at}: an object is required`); return; }
+    if (!types.includes(s.type)) { errors.push(`${at}.type: in this step (${session.phase}${session.step ? `, ${session.step}` : ''}) a statement is one of ${types.join(', ')}`); return; }
+    const before = errors.length;
+    if (s.type === 'hypothesis') {
+      const again = record.threads.find((t) => t.by === role && same(t.title, s.title));
+      if (again) {
+        const first = record.statements.find((x) => x.thread === again.id && x.type === 'hypothesis');
+        if (JSON.stringify(first.hypothesis) === JSON.stringify(s.hypothesis)) { repeated += 1; return; }
+        errors.push(`${at}: you have already proposed "${again.title}" (${again.id}); a hypothesis cannot be rewritten once it is on the table`);
+        return;
+      }
+      errors.push(...checkHypothesis(s, at, ctx, role), ...evidenceErrors(s, at, known));
+      if (errors.length === before) pending.push({ ...s, thread: null });
+      return;
+    }
+    const t = thread(record, s.thread);
+    if (!t) { errors.push(`${at}.thread: there is no thread ${s.thread ?? ''}`); return; }
+    if (record.statements.some((x) => x.thread === s.thread && x.by === role && x.type === s.type && x.round === session.round && same(x.text, s.text))) { repeated += 1; return; }
+    if (!isOpen(t)) { errors.push(`${at}: ${t.id} is closed (${t.closed?.reason ?? t.status}); nothing more is said on it`); return; }
+    errors.push(...textErrors(s, at), ...evidenceErrors(s, at, known));
+    if (s.type === 'question') {
+      if (!threadsFor(session, record, role).some((x) => x.id === s.thread)) errors.push(`${at}: ${role} does not speak on ${s.thread} in this step`);
+      if (!['person', 'data'].includes(s.for)) errors.push(`${at}.for: "person" when only the people who run the project can answer, "data" when a number would`);
+    } else if (session.step === 'attack') errors.push(...checkAttackStep(s, at, { ...ctx, pending }, role));
+    else errors.push(...checkReplyStep(s, at, ctx, role));
+    if (errors.length === before) pending.push(s);
+  });
+  // A seat that skips an idea it was given to cover leaves that idea with the red team alone.
+  if (session.phase === 'examine' && session.step === 'attack' && session.round === 1 && !['red-team', 'client'].includes(role)) {
+    const spoke = (id) => [...pending, ...record.statements.filter((x) => x.by === role && x.round === 1)].some((x) => x.thread === id && ['attack', 'question'].includes(x.type));
+    const skipped = openThreads(record).filter((t) => session.assignments[t.id] === role && !spoke(t.id)).map((t) => t.id);
+    if (skipped.length) warnings.push(`You were given ${skipped.join(', ')} to cover and said nothing on ${skipped.length > 1 ? 'them' : 'it'}: make your objection, or an attack starting "This holds:", and save again.`);
+  }
+  if (session.phase === 'propose') {
+    const have = record.threads.filter((t) => t.by === role).length;
+    if (have + pending.length > MAX_PER_ROLE) errors.push(`At most ${MAX_PER_ROLE} hypotheses per role: you have ${have} and sent ${pending.length} more. Keep the strongest.`);
+    const scales = [...record.statements.filter((x) => x.type === 'hypothesis' && x.by === role).map((x) => x.scale), ...pending.map((x) => x.scale)];
+    if (pending.length && !scales.includes('new')) errors.push('At least one of your hypotheses is new: something the business does not do or have at all (a product, a tool, a channel, a partnership, an audience; see "Range" in your instructions), with a first step cheap enough to test. Replace your weakest idea with one, or send it with the others.');
+  }
+  if (errors.length) return { errors, warnings };
+
+  // From round two an attack needs new evidence, unless the proposer has just narrowed the claim: a new claim is new
+  // ground. It is judged over everything the role says on the thread in this save, not statement by statement.
+  const stale = new Set();
+  if (session.round > 1) {
+    for (const id of new Set(pending.filter((s) => s.type === 'attack').map((s) => s.thread))) {
+      const fresh = pending.filter((s) => s.type === 'attack' && s.thread === id).some((s) => freshEvidence(record, s).length);
+      if (!fresh && lastReply(record, id, session.round - 1)?.stance !== 'narrow') stale.add(id);
+    }
+  }
+
+  const added = [];
+  const closed = [];
+  let n = record.statements.reduce((max, s) => Math.max(max, s.n), 0);
+  for (const s of pending) {
+    const base = { n: ++n, type: s.type, by: role, round: session.round, at: now(), evidence: s.evidence ?? [] };
+    if (s.type === 'hypothesis') {
+      const id = `T${record.threads.reduce((max, t) => Math.max(max, Number(t.id.slice(1))), 0) + 1}`;
+      record.threads.push({ id, by: role, title: one(s.title), status: 'proposed', closed: null });
+      record.statements.push({
+        ...base, thread: id, title: one(s.title), hypothesis: Object.fromEntries(HYPOTHESIS_PARTS.map((p) => [p, one(s.hypothesis[p])])),
+        test: Object.fromEntries(Object.entries(s.test).map(([k, v]) => [k, one(v)])), effort: s.effort, scale: s.scale,
+        ...(s.returns ? { returns: s.returns, whatChanged: one(s.whatChanged) } : {}),
+      });
+      added.push({ n, thread: id, type: s.type });
+      continue;
+    }
+    const t = thread(record, s.thread);
+    const entry = { ...base, thread: s.thread, text: one(s.text) };
+    const fresh = freshEvidence(record, s);
+    if (s.type === 'attack') {
+      entry.kind = s.kind;
+      if (stale.has(s.thread)) {
+        entry.nothingNew = true;
+        close(t, session.round, 'nothing new from the attack');
+      }
+    }
+    if (s.type === 'client') entry.cares = s.cares;
+    if (s.type === 'steelman-reply') entry.accepts = s.accepts;
+    if (s.type === 'reply') {
+      entry.stance = s.stance;
+      entry.to = s.to;
+      if (s.stance === 'narrow') {
+        entry.narrowed = {
+          change: one(s.narrowed.change), effect: one(s.narrowed.effect),
+          ...(s.narrowed.test ? { test: cleanTest(s.narrowed.test) } : {}),
+        };
+      }
+      const unanswered = inThread(record, s.thread).filter((x) => x.round === session.round && x.type === 'attack' && !s.to.includes(x.n));
+      if (unanswered.length) warnings.push(`${t.id}: attack${unanswered.length > 1 ? 's' : ''} ${unanswered.map((x) => x.n).join(', ')} got no answer; the judge will see that`);
+      // A question the proposer answers by looking, with evidence, is no longer one for the person.
+      const asked = record.questions.filter((q) => q.thread === s.thread && q.by !== role && s.to.includes(q.n));
+      if (asked.length && s.stance !== 'concede') {
+        if (!entry.evidence.length) warnings.push(`${t.id}: question${asked.length > 1 ? 's' : ''} ${asked.map((q) => q.n).join(', ')} stay${asked.length > 1 ? '' : 's'} open for the person; a question is answered by looking, so the reply that answers it cites evidence`);
+        else {
+          for (const q of asked) {
+            record.statements.find((x) => x.n === q.n).answeredBy = n;
+            (record.answered ??= []).push({ ...q, answeredBy: n });
+          }
+          record.questions = record.questions.filter((q) => !asked.includes(q));
+        }
+      }
+      if (s.stance === 'concede') close(t, session.round, 'conceded');
+      else if (session.round > 1 && s.stance === 'refute' && !fresh.length) {
+        entry.nothingNew = true;
+        close(t, session.round, 'nothing new from the reply');
+      }
+    }
+    // A question goes to the person. It does not close the thread here: everyone who has a turn in this round still
+    // speaks, and the proposer may answer it. See advance() for when a question that stands ends a thread.
+    if (s.type === 'question') {
+      entry.for = s.for;
+      record.questions.push({ n, thread: s.thread, for: s.for, text: entry.text, by: role });
+    }
+    record.statements.push(entry);
+    added.push({ n, thread: s.thread, type: s.type });
+    if (t.closed && !closed.some((c) => c.thread === t.id)) closed.push({ thread: t.id, reason: t.closed.reason });
+  }
+  takeTurn(session, role);
+  if (session.phase === 'propose' && record.threads.filter((t) => t.by === role).length < 2) warnings.push(`${role} has proposed fewer than two hypotheses`);
+  return { errors, warnings, added, repeated, closed };
+}
+
+// ---- The docket ----
+
+// The judge's list before the debate: which ideas are admitted (with the ones merged into them), and which are turned
+// away because a rule forbids them, the roadmap already plans them or an earlier session settled them. Admitted ideas
+// enter the ledger here, which refuses one that returns from the dead without saying what changed.
+export function saveDocket(ctx, docket, { ideas, date } = {}) {
+  const { session, record } = ctx;
+  const errors = [];
+  if (session.phase !== 'docket') return { errors: [`The docket is saved in the docket phase; the session is in ${session.phase}`] };
+  const admitted = Array.isArray(docket?.admitted) ? docket.admitted : null;
+  const refused = Array.isArray(docket?.refused) ? docket.refused : [];
+  if (!admitted) return { errors: ['$.admitted: an array is required (it may be empty)'] };
+  const seen = new Map();
+  const note = (id, at, as) => {
+    if (!thread(record, id)) { errors.push(`${at}: there is no thread ${id ?? ''}`); return; }
+    if (seen.has(id)) errors.push(`${at}: ${id} is already listed as ${seen.get(id)}`);
+    seen.set(id, as);
+  };
+  admitted.forEach((a, i) => {
+    note(a?.thread, `$.admitted[${i}].thread`, 'admitted');
+    (a?.merge ?? []).forEach((m, j) => note(m, `$.admitted[${i}].merge[${j}]`, `merged into ${a.thread}`));
+    if (a?.returns !== undefined && !/^I\d{1,4}$/.test(a.returns)) errors.push(`$.admitted[${i}].returns: a ledger id such as I7`);
+  });
+  refused.forEach((r, i) => {
+    note(r?.thread, `$.refused[${i}].thread`, 'refused');
+    if (one(r?.reason).length < 10) errors.push(`$.refused[${i}].reason: say why it is turned away`);
+  });
+  for (const t of record.threads) if (!seen.has(t.id)) errors.push(`${t.id} "${t.title}" is not on the docket: admit it, merge it into another or refuse it with a reason`);
+  if (errors.length) return { errors };
+
+  // Into the ledger first: when it refuses an idea, nothing of the docket is saved.
+  const hypothesisOf = (id) => record.statements.find((s) => s.thread === id && s.type === 'hypothesis');
+  const entries = admitted.map((a) => {
+    const h = hypothesisOf(a.thread);
+    const returns = a.returns ?? h.returns;
+    const whatChanged = a.whatChanged ?? h.whatChanged;
+    return {
+      title: h.title, goal: session.goal, proposedBy: h.by, hypothesis: h.hypothesis, effort: h.effort, ...(h.scale ? { scale: h.scale } : {}),
+      test: { what: h.test.what, metric: h.test.metric, threshold: h.test.threshold, checkAfter: h.test.checkAfter, ...(h.test.baseline ? { baseline: h.test.baseline } : {}) },
+      ...(returns ? { returns, ...(whatChanged ? { whatChanged } : {}) } : {}),
+    };
+  });
+  const ledger = applyIdeas(ideas, { ideas: entries }, { by: 'council', session: session.id, date });
+  if (ledger.errors.length) return { errors: ledger.errors.map((e) => e.replace(/^\$\.ideas\[(\d+)\]/, (_, n) => `$.admitted[${n}] (${admitted[n].thread})`)) };
+
+  admitted.forEach((a, i) => {
+    const t = thread(record, a.thread);
+    t.status = 'admitted';
+    t.ideaId = ledger.saved[i].id;
+    if (a.merge?.length) t.mergedFrom = a.merge;
+    for (const m of a.merge ?? []) Object.assign(thread(record, m), { status: 'merged', mergedInto: a.thread });
+  });
+  for (const r of refused) Object.assign(thread(record, r.thread), { status: 'refused', refused: { reason: one(r.reason), ...(r.ref ? { ref: one(r.ref) } : {}) } });
+  record.docket = { savedAt: new Date().toISOString(), admitted: admitted.length, refused: refused.length, merged: record.threads.filter((t) => t.status === 'merged').length };
+  takeTurn(session, 'judge');
+  return { errors, ideas: ledger.ideas, admitted: admitted.map((a, i) => ({ thread: a.thread, idea: ledger.saved[i].id })), refused: refused.length };
+}
+
+// ---- Moving on ----
+
+// Moves the session to its next phase, round or step. It refuses while a role that has a turn has not taken it,
+// unless forced (a role that failed twice is left out). This is where a thread closes for good: nothing new in a
+// later round, no answer to an attack, a question that is all the attackers had and that stands after the proposer's
+// turn, the third round over, or the budget spent.
+export function advance(ctx, { force = false, ideas = [], date } = {}) {
+  const { session, record, evidence, verdicts } = ctx;
+  let ledger = null;
+  // The verdicts are final from here: the ledger learns the outcome, and the documents are written from it.
+  const settle = () => {
+    const done = finalise(ctx, { ideas, date });
+    if (done.errors.length) return done.errors;
+    ledger = done.ideas;
+    go('write');
+    return [];
+  };
+  const from = { phase: session.phase, round: session.round, step: session.step };
+  const closed = [];
+  const shut = (t, reason, extra) => { if (isOpen(t)) { close(t, session.round, reason, extra); closed.push({ thread: t.id, reason }); } };
+  const go = (phase, round = 0, step = null) => Object.assign(session, { phase, round, step });
+  const waiting = turns(session, record, verdicts).filter((t) => !t.done && !t.optional);
+  const hold = () => (waiting.length && !force
+    ? [`${waiting.map((t) => `${t.name} (${t.role})`).join(', ')} ${waiting.length > 1 ? 'have' : 'has'} not taken ${waiting.length > 1 ? 'their' : 'the'} turn. Start ${waiting.length > 1 ? 'them' : 'that agent'}, or pass --force to go on without.`]
+    : []);
+  const toVerdict = () => {
+    for (const t of openThreads(record)) shut(t, session.closing ? 'the budget ran out' : 'the debate ended', session.closing ? { cutOff: true } : {});
+    go('verdict');
+  };
+  let errors = [];
+
+  switch (session.phase) {
+    case 'open': go('evidence'); break;
+    case 'evidence':
+      if (!evidence.collectedAt) errors = ['The evidence has not been collected: run "evidence --collect" first.'];
+      else go('track-record');
+      break;
+    case 'track-record': go('propose'); break;
+    case 'propose':
+      errors = hold();
+      if (!errors.length && !record.threads.length) errors = ['Nobody has proposed anything yet, so there is nothing to debate.'];
+      if (!errors.length) go('docket');
+      break;
+    case 'docket':
+      if (!record.docket) { errors = ['The docket has not been saved: the judge admits, merges or refuses every idea first.']; break; }
+      if (!openThreads(record).length) { toVerdict(); break; }
+      go('examine', 1, 'attack');
+      session.assignments = assignAttackers(session, record);
+      break;
+    case 'examine': {
+      errors = hold();
+      if (errors.length) break;
+      const said = (t, types) => record.statements.some((s) => s.thread === t.id && s.round === session.round && types.includes(s.type));
+      // A question put to the proposer in this round that nobody has answered.
+      const asked = (t) => record.questions.find((q) => q.thread === t.id && q.by !== t.by && record.statements.find((s) => s.n === q.n)?.round === session.round) ?? null;
+      // With the runs spent nobody can reply, so the round ends here and the judge rules on what was said.
+      if (session.step === 'attack' && debateSpent(session)) { toVerdict(); break; }
+      if (session.step === 'attack') {
+        // From round two a thread nobody presses any further is settled: the attack rests. A question is not rest:
+        // the proposer gets the turn to answer it.
+        if (session.round > 1) for (const t of openThreads(record)) if (!said(t, ['attack']) && !asked(t)) shut(t, 'the attack rests');
+        if (openThreads(record).some((t) => toAnswer(record, t.id, session.round).length)) session.step = 'reply';
+        else toVerdict();
+        break;
+      }
+      // A proposer who could not be started because the runs are spent did not refuse to answer.
+      const spent = session.runs >= debateAllowance(session);
+      for (const t of openThreads(record)) {
+        if (said(t, ['attack', 'client']) && !said(t, ['reply'])) shut(t, spent ? 'the budget ran out' : 'the attack went unanswered', spent ? { cutOff: true } : {});
+      }
+      // A question ends a thread only when it was all the attackers had to say in this round, and the proposer, who
+      // had the turn, could not answer it by looking. Beside an attack it is a note for the person, and the debate
+      // goes on; a proposer never ends the examination of its own idea by asking.
+      for (const t of openThreads(record)) {
+        const question = asked(t);
+        if (question && !said(t, ['attack'])) shut(t, 'a question nobody present can answer', { question: question.n });
+      }
+      if (session.round >= MAX_ROUNDS) for (const t of openThreads(record)) shut(t, 'the third round is over');
+      if (session.closing || !openThreads(record).length) toVerdict();
+      else go('examine', session.round + 1, 'attack');
+      break;
+    }
+    case 'verdict': {
+      const admitted = record.threads.filter((t) => t.status === 'admitted');
+      if (verdicts.rulings.length !== admitted.length) { errors = ['The judge has not ruled on every admitted idea yet.']; break; }
+      // One survivor, or none, is not a set.
+      if (survivors(verdicts).length >= 2) go('set');
+      else errors = settle();
+      break;
+    }
+    case 'set':
+      if (!verdicts.set) {
+        if (!force) { errors = hold(); break; }
+        verdicts.set = { notes: [], changes: [], skipped: true };
+      }
+      if (verdicts.set.notes.some((n) => n.asksRuling) && !verdicts.set.changes) {
+        if (!force) { errors = hold(); break; }
+        verdicts.set.changes = [];
+      }
+      verdicts.set.changes ??= [];
+      errors = settle();
+      break;
+    default:
+      errors = [`"next" does not move the session out of the ${session.phase} phase; see the status command for what it needs.`];
+  }
+  return { errors, from, to: { phase: session.phase, round: session.round, step: session.step }, closed, ideas: ledger };
+}
+
+// One sentence on what happens next, for the orchestrator.
+export function nextStep(session, record, evidence, verdicts = null) {
+  const waiting = turns(session, record, verdicts).filter((t) => !t.done && !t.optional).map((t) => t.name);
+  const names = waiting.join(', ');
+  switch (session.phase) {
+    case 'open': return 'Ask the person once about decisions and results still waiting from earlier sessions, then run "next".';
+    case 'evidence': return evidence.collectedAt ? 'The evidence is collected. The competitor analyst may add what rivals do; then run "next".' : 'Run "evidence --collect".';
+    case 'track-record': return 'Check the ideas whose test date has passed, then run "next".';
+    case 'propose': return debateSpent(session) ? `The debate has used its agent runs, so no more proposers are started. ${waiting.length ? `Wait for ${names}, already started, then run "next"` : 'Run "next"'} with what was proposed.` : waiting.length ? `Start the proposers, all at once: ${names}.` : 'Everyone has proposed. Run "next" for the docket.';
+    case 'docket': return record.docket ? 'The docket is saved. Run "next" to open the examination.' : 'Start the judge for the docket.';
+    case 'examine': {
+      if (debateSpent(session)) return `The debate has used its agent runs, so nobody more is started in it: a refusal for the budget is final and is not retried. ${waiting.length ? `Wait for ${names}, already started, then run "next"` : 'Run "next"'}: the judge rules on what is there.`;
+      const what = session.step === 'attack' ? 'attackers' : 'proposers, to reply';
+      const tail = session.closing ? ' The budget is nearly spent: this is the last round.' : '';
+      return waiting.length ? `Round ${session.round}: start the ${what}, all at once: ${names}.${tail}` : `Round ${session.round}, ${session.step}: everyone has spoken. Run "next".${tail}`;
+    }
+    case 'verdict': return waiting.length ? 'Start the judge for the verdict.' : 'Every idea has its ruling. Run "next".';
+    case 'set': return waiting.length ? `Start ${names}: ${verdicts?.set ? 'the red team asks for a verdict to be looked at again' : 'the survivors are looked at as a set'}.` : 'The set has been looked at. Run "next" to make the verdicts final.';
+    case 'write': return 'The verdicts are final and in the idea ledger. The two documents come next.';
+    default: return `The session is in the ${session.phase} phase.`;
+  }
+}

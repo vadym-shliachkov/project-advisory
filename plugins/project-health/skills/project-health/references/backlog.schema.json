@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Outcome backlog",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["items"],
+  "properties": {
+    "items": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "findingIds", "outcome", "acceptanceCriteria", "dependsOn", "priority"],
+        "properties": {
+          "id": { "type": "string", "pattern": "^BL-\\d{3}$" },
+          "findingIds": { "type": "array", "minItems": 1, "items": { "type": "string", "pattern": "^[A-Z]+-[0-9a-f]{4,8}$" } },
+          "outcome": { "type": "string", "minLength": 10 },
+          "acceptanceCriteria": { "type": "array", "minItems": 1, "items": { "type": "string", "minLength": 5 } },
+          "dependsOn": { "type": "array", "items": { "type": "string", "pattern": "^BL-\\d{3}$" } },
+          "priority": { "type": "string", "enum": ["critical", "high", "medium", "low"] }
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,272 @@
+/* The council's documents: the suggestions and the discussion.
+   The look is that of the project-health report, so the documents of the marketplace read as one family:
+   - Margins: 20 mm. A band in the project's colour at the top of the first page, no cover page.
+   - Type: IBM Plex Serif for headings over IBM Plex Sans for text; the speeches of the discussion are set in the serif,
+     because they are meant to be read through rather than scanned.
+   - Type scale: major third from a 10 pt body: 8 / 9 / 10 / 12.5 / 15.5 / 19.5 / 24 pt.
+   - Spacing: a 4 pt grid. Inside a block 4-8, between blocks 16-24, between groups 32-48.
+   - Colour: white page, neutral ink and greys, one accent (the brand colour when it is dark enough to read). Green, red
+     and blue only carry meaning: survived, killed, undecided.
+   - Everything is full width. Nothing sits side by side that could break across pages. */
+
+@page {
+  size: A4; margin: 20mm 20mm 22mm;
+  @bottom-right { content: counter(page); font: 8pt "IBM Plex Sans", "Segoe UI", Arial, sans-serif; color: #667085; }
+}
+/* The first page has no side or top margins so the band runs edge to edge; its content is padded instead. */
+@page :first { margin: 0 0 16mm; @bottom-right { content: none; } }
+
+:root {
+  --ink: #1d2433;
+  --body: #344054;
+  --muted: #667085;
+  --line: #e4e7ec;
+  --surface: #f6f7f9;
+  --accent: #1f2937;
+  --accent-soft: color-mix(in srgb, var(--accent) 6%, #ffffff);
+  --good: #067647;
+  --good-soft: #ecfdf3;
+  --bad: #b42318;
+  --bad-soft: #fef3f2;
+  --check: #175cd3;
+  --check-soft: #eff4ff;
+  --warn: #b54708;
+  --warn-soft: #fffaeb;
+
+  --sans: "IBM Plex Sans", "Segoe UI", -apple-system, Roboto, Arial, sans-serif;
+  --serif: "IBM Plex Serif", Georgia, "Times New Roman", serif;
+  --t-xs: 8pt;
+  --t-sm: 9pt;
+  --t-body: 10pt;
+  --t-md: 12.5pt;
+  --t-lg: 15.5pt;
+  --t-xl: 19.5pt;
+  --t-2xl: 24pt;
+
+  --sp-1: 4pt;
+  --sp-2: 8pt;
+  --sp-3: 12pt;
+  --sp-4: 16pt;
+  --sp-5: 24pt;
+  --sp-6: 32pt;
+  --sp-7: 48pt;
+  --radius: 6pt;
+  --prose: 145mm;
+}
+
+* { box-sizing: border-box; }
+html { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+body { margin: 0; font-family: var(--sans); font-size: var(--t-body); line-height: 1.55; color: var(--body); font-variant-numeric: tabular-nums; }
+h1, h2, h3 { font-family: var(--serif); color: var(--ink); font-weight: 600; line-height: 1.2; break-after: avoid; }
+h2 { font-size: var(--t-2xl); margin: 0 0 var(--sp-2); }
+h3 { font-size: var(--t-lg); margin: var(--sp-6) 0 var(--sp-2); }
+h4, h5 { font-family: var(--sans); font-size: var(--t-xs); font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); margin: 0 0 var(--sp-1); break-after: avoid; }
+p { margin: 0 0 var(--sp-2); }
+strong, b { color: var(--ink); font-weight: 600; }
+ul, ol { margin: 0; padding-left: 14pt; }
+li { margin: 0 0 var(--sp-1); break-inside: avoid; }
+.lead { font-size: 11pt; line-height: 1.55; color: var(--muted); max-width: var(--prose); margin: 0 0 var(--sp-5); }
+.meta { color: var(--muted); font-size: var(--t-sm); }
+.sub { display: block; color: var(--muted); font-size: var(--t-sm); line-height: 1.45; margin-top: 2pt; font-weight: 400; }
+
+/* The large parts start on a new page with an accent bar; the short ones follow on, so no page is left nearly empty. */
+.decisions, .ideas, .brief, .resume, .appendix { break-before: page; }
+.set, .open, .graveyard, .method, .chapters, .memoriam, .before, .closing { margin-top: var(--sp-7); }
+section > h2 { break-inside: avoid; }
+section > h2::before { content: ""; display: block; width: 18mm; height: 3pt; margin-bottom: var(--sp-3); background: var(--accent); }
+
+/* ---- First page ---- */
+.band {
+  padding: 14mm 20mm 12mm; display: flex; align-items: flex-end; justify-content: space-between; gap: 10mm;
+  background: var(--band-bg); color: var(--band-fg);
+}
+.band-name { font-family: var(--serif); font-size: var(--t-2xl); line-height: 1.1; margin: 0; color: inherit; }
+.band-meta { margin: 0; display: flex; flex-direction: column; align-items: flex-end; font-size: var(--t-sm); opacity: 0.85; }
+.band-meta span:first-child { text-transform: uppercase; letter-spacing: 0.12em; font-size: var(--t-xs); }
+
+.glance { padding: 10mm 20mm 0; }
+.eyebrow { font-size: var(--t-xs); text-transform: uppercase; letter-spacing: 0.12em; color: var(--muted); margin: 0 0 var(--sp-1); }
+.goal { font-family: var(--serif); font-size: var(--t-xl); line-height: 1.25; color: var(--ink); font-weight: 600; margin: 0 0 var(--sp-4); max-width: var(--prose); }
+.verdict { font-size: 11pt; line-height: 1.6; color: var(--ink); margin: 0; max-width: var(--prose); }
+/* The row may wrap onto a second line, so it keeps its own space below: what follows never rides up into it. */
+.counts { display: flex; flex-wrap: wrap; gap: var(--sp-2); margin: var(--sp-4) 0 var(--sp-5); }
+/* A chip never wraps inside, so a row of chips cannot grow into the block below it. */
+.count { border-radius: 10pt; padding: 2pt 10pt; background: var(--surface); color: var(--muted); font-size: var(--t-sm); white-space: nowrap; }
+.count b { font-size: var(--t-body); }
+.count-good { background: var(--good-soft); }
+.count-good b { color: var(--good); }
+.count-bad { background: var(--bad-soft); }
+.count-bad b { color: var(--bad); }
+.count-check { background: var(--check-soft); }
+.count-check b { color: var(--check); }
+
+/* Page 1 of the suggestions: where to start, as a short numbered list. */
+.start { margin-top: 0; padding: var(--sp-4) var(--sp-5); background: var(--accent-soft); border-left: 3pt solid var(--accent); border-radius: 0 var(--radius) var(--radius) 0; max-width: 170mm; break-inside: avoid; }
+.start h2 { font-size: var(--t-lg); margin: 0 0 var(--sp-2); }
+.start h2::before { display: none; }
+.start ol { margin: 0; padding-left: 16pt; }
+.start li { margin: 0 0 var(--sp-2); font-size: 10.5pt; line-height: 1.5; color: var(--ink); }
+.start li:last-child { margin-bottom: 0; }
+.refs { white-space: nowrap; font-size: var(--t-sm); color: var(--muted); }
+.refs::before { content: "· "; }
+
+/* Links: the ink colour with a line under it, so a link never depends on colour alone. */
+a { color: inherit; text-decoration: underline; text-decoration-thickness: 0.5pt; text-underline-offset: 1.5pt; }
+a.idea-link { font-weight: 600; color: var(--ink); text-decoration: none; }
+
+/* Page 2: what the owner is asked for, each line with the idea it comes from. */
+.decisions h3 { font-size: var(--t-md); margin: var(--sp-5) 0 var(--sp-2); }
+.asks { list-style: none; padding: 0; margin: 0 0 var(--sp-2); max-width: 170mm; }
+.asks li { display: grid; grid-template-columns: 18mm 1fr; column-gap: var(--sp-3); padding: var(--sp-2) 0; margin: 0; border-bottom: 1px solid var(--line); font-size: 10pt; line-height: 1.45; color: var(--ink); }
+.asks li:first-child { border-top: 1px solid var(--line); }
+.ask-idea { font-weight: 600; white-space: nowrap; }
+.ask-idea a { text-decoration: none; color: var(--accent); }
+.ask-more { font-size: var(--t-sm); color: var(--body); margin-top: var(--sp-2); }
+.decisions .key-line { font-size: var(--t-sm); color: var(--muted); margin-top: calc(-1 * var(--sp-2)); max-width: var(--prose); }
+.method .key-line { font-size: var(--t-sm); max-width: var(--prose); }
+table.key { margin: 0; }
+table.key td { padding: 3pt var(--sp-2) 3pt 0; border: 0; }
+table.key td:first-child { width: 30mm; white-space: nowrap; }
+
+/* ---- Tables ---- */
+table { width: 100%; border-collapse: separate; border-spacing: 0; margin: 0 0 var(--sp-4); font-size: 9.5pt; line-height: 1.45; }
+th { text-align: left; font-size: var(--t-xs); text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); font-weight: 600; padding: 0 var(--sp-3) var(--sp-2); border-bottom: 1px solid var(--ink); }
+td { text-align: left; padding: var(--sp-2) var(--sp-3); border-bottom: 1px solid var(--line); vertical-align: top; overflow-wrap: anywhere; }
+tr { break-inside: avoid; }
+th:first-child, td:first-child { padding-left: 0; }
+tbody tr:last-child { break-before: avoid; }
+td.no { width: 9mm; font-family: var(--serif); font-weight: 600; color: var(--accent); white-space: nowrap; }
+table.survivors td:nth-child(n+3), table.survivors th:nth-child(n+3) { white-space: nowrap; width: 24mm; }
+/* The owner's answer to each idea: three boxes to tick on paper. With it the short columns take only what they need,
+   so the idea's title keeps its width. */
+table.survivors td:nth-child(n+3), table.survivors th:nth-child(n+3) { width: 1%; }
+.answer { display: grid; gap: 3pt; }
+table.survivors th:last-child { white-space: normal; }
+.answer .box { display: inline-block; width: 8pt; height: 8pt; border: 1px solid var(--ink); border-radius: 1pt; margin-right: 3pt; vertical-align: -1pt; }
+.ask-decide { max-width: var(--prose); margin: 0 0 var(--sp-4); padding: var(--sp-3) var(--sp-4); border-left: 3pt solid var(--accent); background: var(--accent-soft); font-size: 10pt; line-height: 1.5; color: var(--ink); }
+.ask-decide p { margin: 0 0 var(--sp-2); }
+.ask-decide p:last-child { margin: 0; }
+table.undecided td:first-child, table.killed td:first-child, table.refused td:first-child, table.merged td:first-child { width: 62mm; }
+table.survived td { width: 50%; }
+/* A note on the survivors as a set: its kind and the ideas it is about, then the text at full width. */
+.set-note { margin: 0 0 var(--sp-4); padding-top: var(--sp-3); border-top: 1px solid var(--line); max-width: 170mm; break-inside: avoid; }
+.set-head { margin: 0 0 var(--sp-1); }
+.set-ideas { font-size: var(--t-sm); font-weight: 600; color: var(--ink); }
+.set-note p { max-width: var(--prose); }
+table.seats td:first-child { width: 42mm; }
+table.seats td:last-child { width: 30mm; white-space: nowrap; color: var(--muted); }
+
+/* A header row that a screen reader needs and the eye does not. */
+.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+
+/* ---- Tags and stamps ---- */
+.tag { display: inline-block; border-radius: 3pt; padding: 1pt 6pt; margin: 0 var(--sp-1) 0 0; background: var(--surface); color: var(--body); font-size: var(--t-xs); font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; white-space: nowrap; }
+.tag-strong { background: var(--good-soft); color: var(--good); }
+.tag-fair { background: var(--check-soft); color: var(--check); }
+.tag-speculative { background: var(--warn-soft); color: var(--warn); }
+.tag-conflict { background: var(--bad-soft); color: var(--bad); }
+.tag-shared-assumption { background: var(--warn-soft); color: var(--warn); }
+.tag-order { background: var(--check-soft); color: var(--check); }
+.tag-id { background: none; color: var(--muted); font-weight: 400; padding-left: 0; }
+.tag-scale, .tag-scale-addition, .tag-scale-adjustment { background: none; color: var(--ink); border: 0.75pt solid var(--line); }
+/* The two scales that are a decision for the owner stand out; the word says which, the colour only repeats it. */
+.tag-scale-new { background: var(--accent); color: #ffffff; }
+.tag-scale-direction { background: none; color: var(--accent); border: 0.75pt solid var(--accent); }
+.stamp { display: inline-block; border: 1.2pt solid currentColor; border-radius: 3pt; padding: 0 6pt; font-family: var(--sans); font-size: var(--t-xs); font-weight: 600; line-height: 1.7; text-transform: uppercase; letter-spacing: 0.1em; white-space: nowrap; }
+.stamp-survived, .stamp-narrowed { color: var(--good); }
+.stamp-killed { color: var(--bad); }
+.stamp-undecided { color: var(--check); }
+
+/* ---- Suggestions: one idea ---- */
+.idea { margin: 0; padding-top: 0; }
+.idea + .idea { break-before: page; }
+.idea-head { display: flex; gap: 6mm; align-items: flex-start; break-inside: avoid; break-after: avoid; }
+.idea-no { flex: none; width: 12mm; margin: 0; font-family: var(--serif); font-size: 28pt; font-weight: 600; line-height: 1; color: var(--accent); }
+.idea-head h3 { margin: 0 0 var(--sp-2); font-size: var(--t-lg); }
+.tags { margin: 0 0 var(--sp-3); }
+.lede { font-size: 11pt; line-height: 1.55; color: var(--ink); max-width: var(--prose); margin: 0 0 var(--sp-3); break-before: avoid; break-inside: avoid; }
+.smaller { font-size: var(--t-sm); color: var(--muted); margin: 0 0 var(--sp-3); max-width: var(--prose); }
+/* The decision box: what the owner needs to know to say yes or no, each line labelled in words. */
+.decide { margin: var(--sp-3) 0 var(--sp-5); padding: var(--sp-2) var(--sp-4); background: var(--accent-soft); border-left: 3pt solid var(--accent); border-radius: 0 var(--radius) var(--radius) 0; max-width: 170mm; break-inside: avoid; }
+.decide > div { display: grid; grid-template-columns: 30mm 1fr; column-gap: var(--sp-3); padding: var(--sp-2) 0; }
+.decide > div + div { border-top: 1px solid color-mix(in srgb, var(--accent) 14%, #ffffff); }
+.decide dt { font-size: var(--t-sm); font-weight: 600; color: var(--ink); line-height: 1.45; }
+.decide dd { margin: 0; font-size: 10pt; line-height: 1.45; color: var(--ink); }
+.decide dd p { margin: 0; }
+.decide dd ul { margin: 0; padding-left: 12pt; }
+.decide dd li { margin: 0 0 2pt; }
+/* Below the box, the reasoning for whoever runs the test. */
+.case { margin: var(--sp-5) 0 0; padding-bottom: var(--sp-1); border-bottom: 1.5pt solid var(--ink); font-size: var(--t-sm); color: var(--ink); letter-spacing: 0.12em; }
+.idea-foot { margin-top: var(--sp-4); padding-top: var(--sp-2); border-top: 1px solid var(--line); }
+/* Pictures of the pages an idea is about, taken by the council during the debate. */
+.shots { display: grid; grid-template-columns: 1fr 1fr; gap: var(--sp-3); margin: var(--sp-3) 0; max-width: 170mm; break-inside: avoid; }
+.shots-one { grid-template-columns: 1fr; max-width: 110mm; }
+.shot { margin: 0; }
+.shot img { display: block; width: 100%; height: auto; border: 1px solid var(--line); border-radius: 3pt; }
+.shot figcaption { margin-top: 3pt; font-size: var(--t-xs); color: var(--muted); overflow-wrap: anywhere; }
+.field { margin: var(--sp-4) 0 0; break-inside: avoid; max-width: 170mm; }
+.field p, .field ul, .field ol, .method p, .closing p, .memoriam p { max-width: var(--prose); }
+/* A field that holds a list or a table may run over the page: its rows stay whole, and its label stays with its first lines. */
+.field-long { break-inside: auto; }
+.field-long > h5 + * { break-before: avoid; }
+.field table { margin-bottom: 0; }
+.by { color: var(--muted); font-size: var(--t-sm); }
+.kill { margin-top: var(--sp-2); padding: var(--sp-2) var(--sp-3); background: var(--bad-soft); border-radius: var(--radius); max-width: var(--prose); }
+.evidence { list-style: none; padding: 0; margin: var(--sp-2) 0 0; font-size: var(--t-sm); line-height: 1.45; }
+.evidence li { padding: 3pt 0; border-top: 1px solid var(--line); overflow-wrap: anywhere; }
+.ev-id { font-weight: 600; color: var(--ink); white-space: nowrap; }
+.ev-src { color: var(--muted); font-size: var(--t-xs); overflow-wrap: anywhere; }
+.questions { max-width: var(--prose); padding-left: 20pt; }
+.questions li { margin-bottom: var(--sp-3); padding-left: var(--sp-1); }
+.limits { max-width: var(--prose); margin-bottom: var(--sp-4); }
+.method h4 { margin-top: var(--sp-5); }
+
+/* ---- The discussion ---- */
+.evening { font-size: var(--t-2xl); line-height: 1.15; margin: 0 0 var(--sp-3); max-width: var(--prose); }
+.evening::before { display: none; }
+.goal-line { font-size: 10.5pt; color: var(--body); max-width: var(--prose); margin: 0 0 var(--sp-5); }
+.opening { font-family: var(--serif); font-size: 10.5pt; line-height: 1.65; color: var(--ink); max-width: var(--prose); }
+.note { margin-top: var(--sp-5); padding: var(--sp-3) var(--sp-4); background: var(--surface); border-radius: var(--radius); font-size: var(--t-sm); line-height: 1.5; color: var(--muted); max-width: var(--prose); }
+table.brief-table td:nth-child(3) { width: 40mm; font-size: var(--t-sm); color: var(--muted); }
+table.brief-table td:last-child { width: 40mm; padding-right: 0; }
+table.present { break-inside: avoid; }
+table.present td:first-child { width: 58mm; }
+table.present td:nth-child(2) { width: 42mm; }
+table.present td:last-child { color: var(--muted); font-size: var(--t-sm); }
+
+.chapter { margin-top: var(--sp-7); padding-top: var(--sp-5); border-top: 1.5pt solid var(--ink); }
+.chapter-head { break-inside: avoid; break-after: avoid; }
+.chapter-no { margin: 0 0 var(--sp-1); font-size: var(--t-xs); text-transform: uppercase; letter-spacing: 0.16em; color: var(--muted); }
+.chapter-head h3 { margin: 0 0 var(--sp-2); font-size: var(--t-xl); max-width: 160mm; }
+.chapter-by { margin: 0 0 var(--sp-4); font-size: var(--t-sm); color: var(--muted); }
+.chapter-by .stamp { margin-left: var(--sp-2); }
+.pull { margin: 0 0 var(--sp-5); padding: var(--sp-1) 0 var(--sp-1) var(--sp-4); border-left: 3pt solid var(--accent); font-family: var(--serif); font-style: italic; font-size: var(--t-md); line-height: 1.45; color: var(--ink); max-width: var(--prose); break-inside: avoid; break-after: avoid; }
+/* A speech may run over the page, so that pages fill; it never leaves fewer than three lines on either side, and the
+   speaker's name and the evidence line stay with the words. */
+.speech { margin: 0 0 var(--sp-4); max-width: var(--prose); }
+/* The same speaker going straight on: closer to the speech before, with no name. */
+.speech-on { margin-top: calc(-1 * var(--sp-2)); }
+.speaker { margin: 0 0 2pt; font-size: var(--t-xs); font-weight: 600; text-transform: uppercase; letter-spacing: 0.12em; color: var(--accent); break-after: avoid; }
+.speaker .seat { font-weight: 400; text-transform: none; letter-spacing: 0.02em; color: var(--muted); }
+.said { margin: 0; font-family: var(--serif); font-size: 10.5pt; line-height: 1.6; color: var(--ink); orphans: 3; widows: 3; }
+.cites { margin: 3pt 0 0; font-size: var(--t-xs); color: var(--muted); break-before: avoid; }
+.opening p { margin: 0 0 var(--sp-3); orphans: 3; widows: 3; }
+.aside { margin: 0 0 var(--sp-4) 10mm; max-width: 130mm; font-family: var(--serif); font-style: italic; font-size: 10pt; line-height: 1.55; color: var(--muted); break-inside: avoid; }
+/* The ruling box follows the judge and is not parted from her words by a page break. */
+.ruling { break-before: avoid; margin: var(--sp-5) 0 0; padding: var(--sp-3) var(--sp-4); border-radius: var(--radius); background: var(--surface); max-width: 170mm; break-inside: avoid; }
+.ruling p { margin: 0; font-size: 9.5pt; line-height: 1.5; }
+.ruling .ruling-head { margin-bottom: var(--sp-1); font-size: var(--t-xs); font-weight: 600; text-transform: uppercase; letter-spacing: 0.1em; color: var(--muted); }
+.ruling .ruling-head .stamp { margin-left: var(--sp-2); }
+.ruling-parts { margin: 0; }
+.ruling-parts > div { padding: var(--sp-1) 0; }
+.ruling-parts > div + div { border-top: 1px solid color-mix(in srgb, var(--ink) 10%, transparent); }
+.ruling-parts dt { font-size: var(--t-xs); font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); margin: 0 0 1pt; }
+.ruling-parts dd { margin: 0; font-size: 9.5pt; line-height: 1.5; color: var(--ink); max-width: var(--prose); }
+.ruling-survived, .ruling-narrowed { background: var(--good-soft); }
+.ruling-killed { background: var(--bad-soft); }
+.ruling-undecided { background: var(--check-soft); }
+.brief-text { margin-top: var(--sp-5); }
+.memoriam .opening, .closing .opening { margin-bottom: var(--sp-5); }
+table.evidence-table { font-size: var(--t-sm); }
+table.evidence-table td.ev-id { width: 12mm; }
+table.evidence-table td.ev-src { width: 58mm; }
