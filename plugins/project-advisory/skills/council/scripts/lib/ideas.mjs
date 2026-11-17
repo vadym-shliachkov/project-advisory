@@ -235,5 +235,7 @@ export function ideaLine(i) {
     failed: `failed: ${i.result?.found}`,
     inconclusive: `inconclusive: ${i.result?.found}`,
   }[i.status] ?? i.status;
-  return `${i.id} "${i.title}" [${i.proposedBy}] — ${fate}`.replace(/\s+/g, ' ');
+  const lab = i.labCandidate ? ' (reached further than the council could test: worth taking to the invention lab)' : '';
+  const origin = i.origin === 'lab' ? ' {from the invention lab}' : '';
+  return `${i.id} "${i.title}" [${i.proposedBy}]${origin} — ${fate}${lab}`.replace(/\s+/g, ' ');
 }

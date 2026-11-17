@@ -14,7 +14,7 @@ const stdin = (data) => ({ stdin: () => JSON.stringify(data) });
 const LONG = 'which is said here at enough length to be a real statement';
 
 const hyp = (n, extra = {}) => ({
-  type: 'hypothesis', title: `Idea ${n}: a case study on the services page`, effort: 'small', scale: 'new',
+  type: 'hypothesis', priorArt: { exists: 'no', searched: 'Searched for case studies of this kind on rival sites' }, title: `Idea ${n}: a case study on the services page`, effort: 'small', scale: 'new',
   hypothesis: {
     change: `Publish case study number ${n} with the client's results`,
     effect: 'More enquiries from the services pages, about two a month',
@@ -87,7 +87,7 @@ test('a session gets the date as its id, the default cast, and its folder is ign
   assert.deepEqual([s.phase, s.runs, s.budget, s.closing], ['open', 0, 60, false]);
   assert.equal(s.cast.length, 9);
   assert.deepEqual(proposers(s), ['client', 'search', 'content', 'conversion', 'competitors', 'outsider']);
-  assert.equal(fs.readFileSync(path.join(root, '.project-health', '.gitignore'), 'utf8'), 'runs/\nprofile.json\nlatest.json\ncouncil/\n');
+  assert.equal(fs.readFileSync(path.join(root, '.project-health', '.gitignore'), 'utf8'), 'runs/\nprofile.json\nlatest.json\ncouncil/\nlab/\ncache/\nideas.html\n');
 });
 
 test('an existing .gitignore gains the council line once, and keeps what it had', () => {
@@ -97,7 +97,7 @@ test('an existing .gitignore gains the council line once, and keeps what it had'
   const { dir, session: s } = createSession(root, { date: '2026-11-15' });
   saveSession(dir, { ...s, phase: 'done' });
   createSession(root, { date: '2026-11-15' });
-  assert.equal(fs.readFileSync(path.join(root, '.project-health', '.gitignore'), 'utf8'), 'runs/\nprofile.json\nlatest.json\ncouncil/\n');
+  assert.equal(fs.readFileSync(path.join(root, '.project-health', '.gitignore'), 'utf8'), 'runs/\nprofile.json\nlatest.json\ncouncil/\nlab/\ncache/\nideas.html\n');
 });
 
 test('an unfinished session blocks a new one; a second session on the same day gets -2', () => {
@@ -131,7 +131,7 @@ test('a session the person does not continue is set aside in any phase, and a ne
 test('init says when the budget cannot pay for one full round of the debate', () => {
   const root = tmpDir();
   const small = councilInit({ root, budget: '24' });
-  assert.match(small.warnings[0], /^With a budget of 24, the debate has 12 agent runs .* one full round of attack and reply takes about 28\. .* at least 40/);
+  assert.match(small.warnings[0], /^With a budget of 24, the debate has 12 agent runs .* one full round of attack and reply takes about 29\. .* at least 41/);
 });
 
 test('init asks for the business name when the documents would carry the folder name', () => {
@@ -681,8 +681,8 @@ test('the judge is started for the docket even when the debate has spent its run
 
 test('a session can be stopped and picked up again from disk with the same state', () => {
   const root = tmpDir();
-  const init = councilInit({ root, budget: '40' });
-  assert.deepEqual(init.warnings.filter((w) => /budget/.test(w)), [], 'a budget of 40 covers one full round');
+  const init = councilInit({ root, budget: '41' });
+  assert.deepEqual(init.warnings.filter((w) => /budget/.test(w)), [], 'a budget of 41 covers one full round');
   assert.equal(init.next, 'Ask the person once about decisions and results still waiting from earlier sessions, then run "next".');
   assert.equal(councilNext({ root }).to.phase, 'evidence');
   assert.equal(councilNext({ root }).ok, false);
@@ -707,7 +707,7 @@ test('a session can be stopped and picked up again from disk with the same state
   const status = councilStatus({ root, session: init.session });
   assert.deepEqual([status.phase, status.round, status.step], ['examine', 1, 'attack']);
   assert.deepEqual(status.threads, { proposed: 12, admitted: 12, open: 12, refused: 0, merged: 0, cutOff: 0 });
-  assert.deepEqual(status.budget, { total: 40, forDebate: 28, spent: 0, closing: false });
+  assert.deepEqual(status.budget, { total: 41, forDebate: 29, spent: 0, closing: false });
   assert.equal(status.turns.find((t) => t.role === 'red-team').done, true);
   assert.match(status.next, /Round 1: start the attackers, all at once: Lady Honoria Fairweather, Sir Barnaby Thistlewood/);
   assert.equal(readJson(path.join(init.dir, 'record.json')).statements.length, 14);

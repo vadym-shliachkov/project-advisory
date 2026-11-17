@@ -6,6 +6,7 @@ import { loadFacts } from './bank.mjs';
 import { loadIdeas, trackRecord } from './ideas.mjs';
 import { seat } from './session.mjs';
 import { inThread } from './record.mjs';
+import { adopted } from './lab.mjs';
 
 // The two documents of a session, as data: what the script knows for certain (the model, built from the record and
 // the verdicts) and what the writers add (checked here against the model before it is saved). A document never
@@ -58,16 +59,20 @@ export function buildModel(ctx, root) {
     const h = said.find((s) => s.type === 'hypothesis');
     const ruling = verdicts.rulings.find((r) => r.thread === t.id) ?? null;
     const narrowed = ruling?.verdict === 'narrowed' ? ruling.narrowed : null;
-    const cited = [...new Set(said.flatMap((s) => s.evidence ?? []))];
+    // What the idea cites, and what its proposer found when it looked for the idea elsewhere.
+    const cited = [...new Set([...said.flatMap((s) => s.evidence ?? []), ...(h.priorArt?.evidence ?? [])])];
     return {
       thread: t.id, id: ruling?.ideaId ?? t.ideaId, parentId: narrowed ? t.ideaId : null,
       title: narrowed?.title ?? h.title, originalTitle: h.title,
       proposer: seat(session, t.by), proposerRole: t.by,
       // The idea that survived is what will be tested: when the judge or the proposer gave the smaller form a kill
       // condition or a test of its own, those are its, and the first ones are history.
-      hypothesis: narrowed ? { ...h.hypothesis, change: narrowed.change, effect: narrowed.effect, killCondition: narrowed.killCondition ?? h.hypothesis.killCondition } : h.hypothesis,
-      originalHypothesis: h.hypothesis, effort: h.effort, scale: narrowed?.scale ?? h.scale ?? null,
+      hypothesis: narrowed ? { ...adopted(record, t, h), change: narrowed.change, effect: narrowed.effect, killCondition: narrowed.killCondition ?? h.hypothesis.killCondition } : adopted(record, t, h),
+      originalHypothesis: h.hypothesis,
+      // A bet of the invention lab: what it assumes, the riskiest of it, what it is worth if it works, where it came from.
+      ...(h.assumptions ? { bet: { assumptions: h.assumptions, riskiest: h.riskiest, upside: ruling?.upside ?? h.upside, riskiestNow: ruling?.riskiest ?? null, answers: h.answers ?? null, provocation: h.provocation ?? null, cards: h.cards ?? [], amplified: Boolean(t.adopted) } } : {}), effort: h.effort, scale: narrowed?.scale ?? h.scale ?? null,
       where: narrowed?.where ?? h.where ?? [], novelty: t.novelty ?? null, pass: t.pass ?? 1, uncovered: h.uncovered ?? null,
+      priorArt: h.priorArt ?? null,
       test: narrowed ? narrowed.test ?? said.filter((s) => s.type === 'reply' && s.by === t.by && s.narrowed?.test).at(-1)?.narrowed.test ?? h.test : h.test,
       ruling, verdict: ruling?.verdict ?? null, strength: ruling?.strength ?? null,
       statements: said, closed: t.closed, alsoCovers: (t.mergedFrom ?? []).map(titleOf),
@@ -82,7 +87,7 @@ export function buildModel(ctx, root) {
   const killed = ideas.filter((i) => i.verdict === 'killed');
   const undecided = ideas.filter((i) => i.verdict === 'undecided');
   return {
-    session: { id: session.id, goal: session.goal, url: session.url, budget: session.budget, runs: session.runs },
+    session: { id: session.id, kind: session.kind ?? 'council', goal: session.goal, url: session.url, budget: session.budget, runs: session.runs },
     brand: brandOf(root),
     cast: session.cast,
     ideas, survivors,
@@ -163,8 +168,29 @@ function linkErrors(value, at, model) {
 
 // The decision box of each idea holds `expected`, `killCondition` and `firstStep`: they are short, so the box can be
 // read at a glance. Documents saved before these limits were tightened are still printed (`strict: false`).
-const SURVIVOR_TEXTS = { sentence: [20, 260], comesFrom: [20, 600], expected: [20, 320], why: [20, 450], test: [20, 600], killCondition: [10, 300], firstStep: [10, 240] };
-const OLD_TEXTS = { ...SURVIVOR_TEXTS, expected: [20, 500], why: [20, 600], killCondition: [10, 400], firstStep: [10, 300] };
+const SURVIVOR_TEXTS = { sentence: [20, 260], comesFrom: [20, 600], expected: [20, 320], why: [20, 450], test: [20, 600], killCondition: [10, 300], firstStep: [10, 240], upside: [20, 300] };
+const { upside: _upside, ...BEFORE_UPSIDE } = SURVIVOR_TEXTS;
+// Documents saved before a field was added are still printed: without what if-it-works means, and with longer texts.
+const OLD_TEXTS = { ...BEFORE_UPSIDE, expected: [20, 500], why: [20, 600], killCondition: [10, 400], firstStep: [10, 300] };
+// A surviving bet of the invention lab: the idea, why it could work, its first step, when to drop it, what it is worth
+// if it works, a press release from the day it worked and the questions a sceptic would ask about it.
+export const LAB_SURVIVOR_TEXTS = { sentence: [20, 260], why: [20, 450], firstStep: [10, 240], killCondition: [10, 300], upside: [20, 300] };
+const PRESS_TEXTS = { headline: [10, 120], subhead: [20, 240], body: [200, 1400], quote: [20, 300] };
+function labSurvivorErrors(s, at) {
+  const errors = Object.entries(LAB_SURVIVOR_TEXTS).flatMap(([field, [min, max]]) => textErrors(s[field], `${at}.${field}`, min, max));
+  if (!s.pressRelease || typeof s.pressRelease !== 'object') errors.push(`${at}.pressRelease: the press release from the day it worked, { "headline", "subhead", "body", "quote" }`);
+  else {
+    for (const [field, [min, max]] of Object.entries(PRESS_TEXTS)) errors.push(...textErrors(s.pressRelease[field], `${at}.pressRelease.${field}`, min, max));
+    for (const key of Object.keys(s.pressRelease)) if (!(key in PRESS_TEXTS)) errors.push(`${at}.pressRelease: unknown property "${key}"`);
+  }
+  if (!Array.isArray(s.faq) || s.faq.length < 2 || s.faq.length > 4) errors.push(`${at}.faq: two to four questions a sceptic would ask, each { "q", "a" }`);
+  else s.faq.forEach((f, j) => errors.push(...textErrors(f?.q, `${at}.faq[${j}].q`, 10, 200), ...textErrors(f?.a, `${at}.faq[${j}].a`, 20, 500)));
+  return errors;
+}
+
+// Every killed idea is analysed for the reader, not only listed with its cause of death: what it was, the best that
+// could be said for it, what killed it and whether it could come back.
+export const KILLED_TEXTS = { what: [20, 260], strongestPoint: [20, 300], killedBy: [20, 300], couldReturn: [15, 300] };
 const SUMMARY_MAX = 600;
 const MAX_PLAN = 5;
 
@@ -175,6 +201,7 @@ export function validateSuggestions(doc, model, { strict = true } = {}) {
   if (!doc || typeof doc !== 'object' || Array.isArray(doc)) return ['The result must be a JSON object'];
   if (!model.final) return ['The verdicts are not final yet; the suggestions are written after the session leaves the set'];
   const TEXTS = strict ? SURVIVOR_TEXTS : OLD_TEXTS;
+  const lab = model.session.kind === 'lab';
   errors.push(...textErrors(unlinked(doc.summary), '$.summary', 60, strict ? SUMMARY_MAX : 700), ...linkErrors(doc.summary, '$.summary', model));
   const list = Array.isArray(doc.survivors) ? doc.survivors : null;
   if (!list) return [...errors, '$.survivors: an array is required (empty when nothing survived)'];
@@ -192,11 +219,15 @@ export function validateSuggestions(doc, model, { strict = true } = {}) {
     const linked = new Set(linksIn(raw).map(sameUrl));
     if (strict) for (const w of idea.where) if (!linked.has(sameUrl(w.url))) errors.push(`${at}: link the page this idea changes where you first name it, as [${w.part.length > 40 ? 'the page' : w.part}](${w.url}): the reader does not know the site by heart`);
     const s = unlinked(raw);
-    for (const [field, [min, max]] of Object.entries(TEXTS)) errors.push(...textErrors(s[field], `${at}.${field}`, min, max));
-    if (!Array.isArray(s.survived) || s.survived.length < 1 || s.survived.length > 4) errors.push(`${at}.survived: one to four of the strongest attacks, each with how it was answered`);
-    else s.survived.forEach((x, j) => errors.push(...textErrors(x?.attack, `${at}.survived[${j}].attack`, 15, 320), ...textErrors(x?.answer, `${at}.survived[${j}].answer`, 15, 320)));
-    if (!Array.isArray(s.uncertain) || s.uncertain.length < 1 || s.uncertain.length > 5) errors.push(`${at}.uncertain: one to five things nobody could test; an idea with nothing uncertain was not examined`);
-    else s.uncertain.forEach((x, j) => errors.push(...textErrors(x, `${at}.uncertain[${j}]`, 15, 320)));
+    if (lab) errors.push(...labSurvivorErrors(s, at));
+    else {
+      for (const [field, [min, max]] of Object.entries(TEXTS)) errors.push(...textErrors(s[field], `${at}.${field}`, min, max));
+      if (!strict && s.upside !== undefined) errors.push(...textErrors(s.upside, `${at}.upside`, ...SURVIVOR_TEXTS.upside));
+      if (!Array.isArray(s.survived) || s.survived.length < 1 || s.survived.length > 4) errors.push(`${at}.survived: one to four of the strongest attacks, each with how it was answered`);
+      else s.survived.forEach((x, j) => errors.push(...textErrors(x?.attack, `${at}.survived[${j}].attack`, 15, 320), ...textErrors(x?.answer, `${at}.survived[${j}].answer`, 15, 320)));
+      if (!Array.isArray(s.uncertain) || s.uncertain.length < 1 || s.uncertain.length > 5) errors.push(`${at}.uncertain: one to five things nobody could test; an idea with nothing uncertain was not examined`);
+      else s.uncertain.forEach((x, j) => errors.push(...textErrors(x, `${at}.uncertain[${j}]`, 15, 320)));
+    }
     if (s.needs !== undefined && (!Array.isArray(s.needs) || s.needs.length > 5)) errors.push(`${at}.needs: at most five things (access, content, a decision)`);
     else (s.needs ?? []).forEach((x, j) => errors.push(...textErrors(x, `${at}.needs[${j}]`, 5, 200)));
     if (s.fitsWith !== undefined) errors.push(...textErrors(s.fitsWith, `${at}.fitsWith`, 15, 400));
@@ -205,7 +236,8 @@ export function validateSuggestions(doc, model, { strict = true } = {}) {
     if (s.fromYou === undefined) { if (strict) errors.push(`${at}.fromYou: what this idea needs from the owner (a decision, a sign-off, a fact only they know), up to three points; [] when it needs nothing from them`); }
     else if (!Array.isArray(s.fromYou) || s.fromYou.length > 3) errors.push(`${at}.fromYou: up to three points, [] when it needs nothing from the owner`);
     else s.fromYou.forEach((x, j) => errors.push(...textErrors(x, `${at}.fromYou[${j}]`, 10, 200)));
-    for (const key of Object.keys(s)) if (!['idea', ...Object.keys(SURVIVOR_TEXTS), 'survived', 'uncertain', 'needs', 'fromYou', 'fitsWith'].includes(key)) errors.push(`${at}: unknown property "${key}"`);
+    const keys = lab ? ['idea', ...Object.keys(LAB_SURVIVOR_TEXTS), 'pressRelease', 'faq', 'needs', 'fromYou'] : ['idea', ...Object.keys(SURVIVOR_TEXTS), 'survived', 'uncertain', 'needs', 'fromYou', 'fitsWith'];
+    for (const key of Object.keys(s)) if (!keys.includes(key)) errors.push(`${at}: unknown property "${key}"`);
 
     // A survivor may also draw on the set notes that name it.
     const allowed = numbersOf([sourcesOf(idea), model.setNotes.filter((n) => n.threads.includes(idea.thread))]);
@@ -215,6 +247,28 @@ export function validateSuggestions(doc, model, { strict = true } = {}) {
     if (ESTIMATE_RE.test(text)) errors.push(`${at}: "${ESTIMATE_RE.exec(text)[0]}" reads as an estimate of the work. Effort is small, medium or large, and the script prints it`);
   });
   for (const idea of model.survivors) if (!seen.has(idea.id)) errors.push(`${idea.id} "${idea.title}" survived and is missing: every survivor is reported`);
+
+  // Every killed idea, analysed: the reader decides nothing about it, but learns what was looked at and why it fell.
+  const dead = new Map(model.killed.map((k) => [k.id, k]));
+  if (doc.killed === undefined) { if (strict && dead.size) errors.push(`$.killed: one entry for each killed idea (${[...dead.keys()].join(', ')}), each { "idea", "what", "strongestPoint", "killedBy", "couldReturn" }`); }
+  else if (!Array.isArray(doc.killed)) errors.push('$.killed: an array is required (empty when nothing was killed)');
+  else {
+    const covered = new Set();
+    doc.killed.forEach((raw, i) => {
+      const at = `$.killed[${i}]`;
+      const idea = dead.get(raw?.idea);
+      if (!idea) { errors.push(`${at}.idea: "${raw?.idea ?? ''}" is not an idea killed in this session; they are ${[...dead.keys()].join(', ') || 'none'}`); return; }
+      if (covered.has(idea.id)) { errors.push(`${at}.idea: ${idea.id} appears twice`); return; }
+      covered.add(idea.id);
+      errors.push(...linkErrors(raw, at, model));
+      const k = unlinked(raw);
+      for (const [field, [min, max]] of Object.entries(KILLED_TEXTS)) errors.push(...textErrors(k[field], `${at}.${field}`, min, max));
+      for (const key of Object.keys(raw)) if (!['idea', ...Object.keys(KILLED_TEXTS)].includes(key)) errors.push(`${at}: unknown property "${key}"`);
+      const stray = strayNumbers(JSON.stringify(k), numbersOf(sourcesOf(idea)));
+      if (stray.length) errors.push(`${at}: the number${stray.length > 1 ? 's' : ''} ${stray.join(', ')} ${stray.length > 1 ? 'are' : 'is'} not in the debate on ${idea.id}`);
+    });
+    for (const id of dead.keys()) if (!covered.has(id)) errors.push(`$.killed: ${id} "${dead.get(id).title}" is missing: every killed idea is analysed for the reader`);
+  }
 
   // The bold ideas that did not survive: what each would do, and what would make it worth trying.
   const bets = new Map(model.bets.map((b) => [b.id, b]));
@@ -265,7 +319,7 @@ export function validateSuggestions(doc, model, { strict = true } = {}) {
     const stray = strayNumbers(one(unlinked(p?.text)), all);
     if (stray.length) errors.push(`${at}.text: the number${stray.length > 1 ? 's' : ''} ${stray.join(', ')} ${stray.length > 1 ? 'are' : 'is'} not in the record`);
   });
-  for (const key of Object.keys(doc)) if (!['summary', 'plan', 'survivors', 'bets', 'questions'].includes(key)) errors.push(`$: unknown property "${key}"`);
+  for (const key of Object.keys(doc)) if (!['summary', 'plan', 'survivors', 'killed', 'bets', 'questions'].includes(key)) errors.push(`$: unknown property "${key}"`);
   return errors;
 }
 

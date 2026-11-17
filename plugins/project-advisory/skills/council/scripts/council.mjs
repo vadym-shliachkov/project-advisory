@@ -26,6 +26,10 @@ const OPTIONS = {
   source: { type: 'string' },
   confidence: { type: 'string' },
   reason: { type: 'string' },
+  refresh: { type: 'string' },
+  kind: { type: 'string' },
+  pick: { type: 'string' },
+  show: { type: 'boolean' },
   collect: { type: 'boolean' },
   force: { type: 'boolean' },
   abandon: { type: 'boolean' },
@@ -36,7 +40,7 @@ const OPTIONS = {
 const [command, ...rest] = process.argv.slice(2);
 const fn = COMMANDS[command];
 if (!fn) {
-  console.error(`Usage: council <${Object.keys(COMMANDS).join('|')}> [--root <dir>] [--session <id>] [options]`);
+  console.error(`Usage: ${process.env.COUNCIL_KIND === 'lab' ? 'lab' : 'council'} <${Object.keys(COMMANDS).join('|')}> [--root <dir>] [--session <id>] [options]`);
   process.exit(2);
 }
 

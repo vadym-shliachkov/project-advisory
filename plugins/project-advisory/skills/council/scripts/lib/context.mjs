@@ -1,12 +1,14 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { writeJson } from './io.mjs';
-import { SKILL_DIR } from './paths.mjs';
+import { SKILL_DIR, LAB_DIR, scriptOf } from './paths.mjs';
 import { today } from './bank.mjs';
 import { digest, recordLine } from './digest.mjs';
 import { loadIdeas, dueForCheck, trackRecord, ideasPath } from './ideas.mjs';
-import { seat, proposers } from './session.mjs';
+import { seat, proposers, isLab } from './session.mjs';
 import { evidencePath } from './evidence.mjs';
+import { loadGroundwork } from './groundwork.mjs';
+import { loadFrame, dealtTo, adopted } from './lab.mjs';
 import { inThread, threadsFor, passOf } from './record.mjs';
 import { strengthAllowed, survivors } from './verdict.mjs';
 import { docTurn, DOC_STAFF } from './flow.mjs';
@@ -14,13 +16,15 @@ import { docTurn, DOC_STAFF } from './flow.mjs';
 // What one agent is given for one turn: the rules of the debate, its seat, the instructions for this kind of turn,
 // the files to read and how to save. The agent's whole task is the text this returns.
 
-const SCRIPT = path.join(SKILL_DIR, 'scripts', 'council.mjs');
-const read = (rel) => fs.readFileSync(path.join(SKILL_DIR, 'agents', rel), 'utf8').trim();
-const exists = (rel) => fs.existsSync(path.join(SKILL_DIR, 'agents', rel));
+// A lab session reads the lab's own prompt when it has one, and the council's otherwise (the rules of evidence, the
+// customer's voice, the reply, the layout review are the same).
+const agentsDir = (session, rel) => (isLab(session) && fs.existsSync(path.join(LAB_DIR, 'agents', rel)) ? path.join(LAB_DIR, 'agents') : path.join(SKILL_DIR, 'agents'));
+const read = (rel, session = null) => fs.readFileSync(path.join(agentsDir(session, rel), rel), 'utf8').trim();
+const exists = (rel, session = null) => fs.existsSync(path.join(agentsDir(session, rel), rel));
 const one = (s) => String(s ?? '').replace(/\s+/g, ' ').trim();
 
 // Roles that are not seats at the table: they do one job for the session and say nothing in the debate.
-export const STAFF = ['track-record', 'casting', 'horizon', ...DOC_STAFF];
+export const STAFF = ['track-record', 'casting', 'horizon', 'primer', 'framer', ...DOC_STAFF];
 
 function saveLines(cmd, save, shape, okLine, badLine) {
   if (!save) return ['Reply with the JSON object only, as described above. Do not write any files.'];
@@ -95,8 +99,12 @@ function threadView(ctx, t, { you = null } = {}) {
   const blind = (text) => blindText(text, session, labels);
   return {
     id: t.id, title: blind(h.title),
-    hypothesis: Object.fromEntries(Object.entries(h.hypothesis).map(([k, v]) => [k, blind(v)])),
+    hypothesis: Object.fromEntries(Object.entries(adopted(record, t, h)).map(([k, v]) => [k, blind(v)])),
+    ...(h.assumptions ? { assumptions: h.assumptions.map(blind), riskiest: h.riskiest, upside: h.upside } : {}),
+    ...(h.answers ? { answers: h.answers } : {}), ...(h.provocation ? { provocation: h.provocation } : {}), ...(h.cards ? { cards: h.cards } : {}),
+    ...(t.adopted ? { amplifiedBy: t.adopted } : {}),
     test: h.test, effort: h.effort, ...(h.scale ? { scale: h.scale } : {}), evidence: h.evidence,
+    ...(h.priorArt ? { priorArt: Object.fromEntries(Object.entries(h.priorArt).map(([k, v]) => [k, typeof v === 'string' ? blind(v) : v])) } : {}),
     ...(h.returns ? { returns: h.returns, whatChanged: blind(h.whatChanged) } : {}),
     // A merged idea is more than its title: what it would have changed must not vanish unseen.
     ...(t.mergedFrom ? { alsoCovers: t.mergedFrom.map((id) => { const merged = record.statements.find((s) => s.thread === id && s.type === 'hypothesis'); return { title: blind(merged?.title ?? id), change: blind(merged?.hypothesis.change ?? '') }; }) } : {}),
@@ -107,6 +115,7 @@ function threadView(ctx, t, { you = null } = {}) {
       // A question says whom it is for, and whether the proposer answered it by looking.
       ...(s.for ? { for: s.for } : {}), ...(s.answeredBy ? { answeredBy: s.answeredBy } : {}),
       ...(s.nothingNew ? { nothingNew: true } : {}), ...(s.verdict ? { verdict: s.verdict } : {}),
+      ...(s.bigger ? { bigger: Object.fromEntries(Object.entries(s.bigger).map(([k, v]) => [k, blind(v)])) } : {}), ...(s.assumption !== undefined ? { assumption: s.assumption } : {}),
     })),
     ...(t.closed ? { closed: t.closed } : {}),
   };
@@ -123,7 +132,7 @@ function ideaView(ctx, t) {
 function turnOf(ctx, role, root) {
   const { session, record, verdicts } = ctx;
   if (session.phase === 'write' || session.phase === 'review') return docTurn(ctx, role, root);
-  const cmd = (rest) => `node "${SCRIPT}" ${rest} --root "${root}" --session ${session.id}`;
+  const cmd = (rest) => `node "${scriptOf(session)}" ${rest} --root "${root}" --session ${session.id}`;
   const mine = threadsFor(session, record, role);
   const not = (why) => { throw new Error(`It is not ${role}'s turn: ${why}. See the status command for whose turn it is.`); };
 
@@ -132,30 +141,56 @@ function turnOf(ctx, role, root) {
       if (role !== 'casting') not('before the session starts only the cast can be chosen, by the casting role');
       return { prompts: ['casting.md'], digest: true, input: null, cmd: cmd('cast'), shape: '{ "seats": [ { "role": "onboarding", "title": "Onboarding", "ground": "…" } ] }', okLine: 'casting: ok, 5 seats', badLine: 'casting: invalid — <first error>' };
     case 'evidence':
+      if (role === 'primer') {
+        // A primer written before is refreshed, not written again: what still holds stays, and what changed is said.
+        const previous = loadGroundwork(root, 'primer');
+        return { prompts: ['primer.md'], digest: true, input: { name: 'primer', data: { refresh: Boolean(previous?.primer), previous: previous?.primer ? { at: previous.at, primer: previous.primer, sources: previous.entries } : null } }, cmd: cmd('primer'), shape: '{ "primer": { "trade": "…", "buyers": [ { "who": "…", "job": "…", "howTheyBuy": "…" } ], "economics": "…", "commodity": ["…"], "scarce": ["…"], "clocks": [ { "what": "…", "when": "2027-04" } ], "vocabulary": [ { "term": "…", "means": "…" } ], "playbook": ["…"] }, "evidence": [ { "grade": "observed", "source": "https://…", "date": "2026-10-02", "text": "…" } ] }', okLine: 'primer: ok, 6 sources', badLine: 'primer: invalid — <first error>' };
+      }
       if (role === 'horizon') return { prompts: ['horizon.md'], digest: true, input: null, cmd: cmd('evidence --role horizon'), shape: '{ "evidence": [ { "grade": "observed", "source": "https://…", "date": "2026-10-02", "text": "…" } ] }', okLine: 'horizon: ok, 14 openings', badLine: 'horizon: invalid — <first error>' };
-      if (role !== 'competitors') not('in the evidence phase only the competitor analyst and the horizon scan look around');
+      if (role !== 'competitors') not('in the evidence phase only the domain primer, the competitor analyst and the horizon scan look around');
       return { prompts: ['scout.md'], input: null, cmd: cmd('evidence --role competitors'), shape: '{ "evidence": [ { "grade": "observed", "source": "https://…", "text": "…" } ] }', okLine: 'scout: ok, 9 observations', badLine: 'scout: invalid — <first error>' };
+    case 'frame': {
+      const frame = loadFrame(ctx.dir);
+      if (role === 'framer') return { prompts: ['framer.md'], digest: true, input: null, cmd: cmd('frame --role framer'), shape: '{ "frame": { "ideal": "…", "contradictions": [ { "want": "…", "butThen": "…", "separate": "…" } ], "resources": ["…"], "curve": { "now": "…", "next": "…" }, "questions": [ { "text": "How might we …", "altitude": "reframe" } ] } }', okLine: 'framer: ok, 8 questions', badLine: 'framer: invalid — <first error>' };
+      if (role !== 'provocateur' || session.step !== 'provoke') not('in the frame phase the framer sets the problem, then the provocateur writes the provocations');
+      return { prompts: ['provocateur.md'], digest: true, input: { name: 'provoke', data: { frame: frame?.frame ?? null } }, cmd: cmd('frame --role provocateur'), shape: '{ "provocations": [ { "text": "Clients pay us nothing.", "kind": "reversal" } ] }', okLine: 'provocateur: ok, 8 provocations', badLine: 'provocateur: invalid — <first error>' };
+    }
+    case 'amplify': {
+      if (!mine.length) not(`${role} has no bet to build on`);
+      return { prompts: ['_contract.md', 'amplifier.md'], sheet: role !== 'client', input: { name: `amplify-${role}`, data: { bets: mine.map((t) => ideaView(ctx, t)) } }, cmd: cmd(`say --role ${role}`), shape: '{ "statements": [ { "type": "amplify", "thread": "T3", "text": "…", "bigger": { "change": "…", "effect": "…", "because": "…" } } ] }', okLine: `${role}: ok, 2 bets built on`, badLine: `${role}: invalid — <first error>` };
+    }
     case 'track-record': {
       if (role !== 'track-record') not('the track record is checked by the track-record role');
       const due = dueForCheck(loadIdeas(root));
       if (!due.length) not('no idea has a test whose date has passed');
-      return { prompts: ['track-record.md'], input: { name: 'track-record', data: { today: today(), ideas: due } }, cmd: `node "${SCRIPT}" ideas --root "${root}" --by council --session ${session.id}`, shape: '{ "ideas": [ { "id": "I3", "status": "worked", "result": { "found": "…", "source": "…" } } ] }', okLine: 'track record: ok, 2 results', badLine: 'track record: invalid — <first error>' };
+      return { prompts: ['track-record.md'], input: { name: 'track-record', data: { today: today(), ideas: due } }, cmd: `node "${scriptOf(session)}" ideas --root "${root}" --by council --session ${session.id}`, shape: '{ "ideas": [ { "id": "I3", "status": "worked", "result": { "found": "…", "source": "…" } } ] }', okLine: 'track record: ok, 2 results', badLine: 'track record: invalid — <first error>' };
     }
     case 'propose': {
       if (!proposers(session).includes(role)) not('this seat does not propose ideas');
+      if (isLab(session)) {
+        const frame = loadFrame(ctx.dir);
+        const base = role === 'client' ? ['_contract.md', 'proposer.md', 'client.md'] : ['_contract.md', 'proposer.md'];
+        const bet = '"assumptions": ["…", "…"], "riskiest": 0, "upside": "significant", "priorArt": { "exists": "no", "searched": "…" }, "evidence": []';
+        if (passOf(session) === 2) {
+          const taken = record.threads.map((t) => { const h = record.statements.find((s) => s.thread === t.id && s.type === 'hypothesis'); return { title: h.title, change: h.hypothesis.change, yours: t.by === role }; });
+          return { prompts: [...base, 'proposer-second.md'], sheet: role !== 'client', digest: true, input: { name: `propose2-${role}`, data: { provocations: frame?.provocations ?? [], taken } }, cmd: cmd(`say --role ${role}`), shape: `{ "statements": [ { "type": "hypothesis", "title": "…", "hypothesis": { … }, "test": { … }, "effort": "large", "scale": "new", "provocation": "P3", ${bet} } ] }`, okLine: `${role}: ok, 2 bets`, badLine: `${role}: invalid — <first error>` };
+        }
+        return { prompts: base, sheet: role !== 'client', digest: true, input: { name: `propose-${role}`, data: dealtTo(session, frame, role) }, cmd: cmd(`say --role ${role}`), shape: `{ "statements": [ { "type": "hypothesis", "title": "…", "hypothesis": { … }, "test": { … }, "effort": "large", "scale": "new", "answers": "H2", "cards": ["K7"], ${bet} } ] }`, okLine: `${role}: ok, 3 bets`, badLine: `${role}: invalid — <first error>` };
+      }
       const base = role === 'client' ? ['_contract.md', 'proposer.md', 'client.md'] : ['_contract.md', 'proposer.md'];
       if (passOf(session) === 2) {
         // The themes on the table, without who proposed them: what to steer away from, not whom to answer.
         const taken = record.threads.map((t) => { const h = record.statements.find((s) => s.thread === t.id && s.type === 'hypothesis'); return { title: h.title, change: h.hypothesis.change, scale: h.scale, yours: t.by === role }; });
-        return { prompts: [...base, 'proposer-second.md'], sheet: role !== 'client', input: { name: `propose2-${role}`, data: { taken } }, digest: true, cmd: cmd(`say --role ${role}`), shape: '{ "statements": [ { "type": "hypothesis", "title": "…", "hypothesis": { … }, "test": { … }, "effort": "large", "scale": "new", "uncovered": "…", "evidence": ["E31"] } ] }', okLine: `${role}: ok, 1 hypothesis`, badLine: `${role}: invalid — <first error>` };
+        return { prompts: [...base, 'proposer-second.md'], sheet: role !== 'client', input: { name: `propose2-${role}`, data: { taken } }, digest: true, cmd: cmd(`say --role ${role}`), shape: '{ "statements": [ { "type": "hypothesis", "title": "…", "hypothesis": { … }, "test": { … }, "effort": "large", "scale": "new", "uncovered": "…", "priorArt": { "exists": "no", "searched": "…" }, "evidence": ["E31"] } ] }', okLine: `${role}: ok, 1 hypothesis`, badLine: `${role}: invalid — <first error>` };
       }
-      return { prompts: base, sheet: role !== 'client', input: null, digest: true, cmd: cmd(`say --role ${role}`), shape: '{ "statements": [ { "type": "hypothesis", "title": "…", "hypothesis": { … }, "test": { … }, "effort": "small", "scale": "adjustment", "where": [ { "url": "https://…", "part": "…", "text": "…" } ], "evidence": ["E3"] } ] }', okLine: `${role}: ok, 3 hypotheses`, badLine: `${role}: invalid — <first error>` };
+      return { prompts: base, sheet: role !== 'client', input: null, digest: true, cmd: cmd(`say --role ${role}`), shape: '{ "statements": [ { "type": "hypothesis", "title": "…", "hypothesis": { … }, "test": { … }, "effort": "small", "scale": "adjustment", "where": [ { "url": "https://…", "part": "…", "text": "…" } ], "priorArt": { "exists": "partly", "searched": "…", "who": "…", "outcome": "…", "difference": "…", "evidence": ["E9"] }, "evidence": ["E3"] } ] }', okLine: `${role}: ok, 3 hypotheses`, badLine: `${role}: invalid — <first error>` };
     }
     case 'docket':
       if (role !== 'judge') not('the docket is the judge\'s');
       return {
         prompts: ['docket.md'], digest: true, cmd: cmd('verdict --stage docket'), shape: '{ "admitted": [ { "thread": "T1", "merge": ["T4"], "novelty": "familiar" } ], "refused": [ { "thread": "T3", "reason": "…", "ref": "S3" } ] }', okLine: 'docket: ok, 14 admitted, 3 refused', badLine: 'docket: invalid — <first error>',
-        input: { name: 'docket', data: { ideas: record.threads.map((t) => ideaView(ctx, t)) } },
+        // In the lab the judge sees what each bet became when another seat built on it, and may adopt that form.
+        input: { name: 'docket', data: { ideas: record.threads.map((t) => (isLab(session) ? threadView(ctx, t) : ideaView(ctx, t))) } },
       };
     case 'examine': {
       if (!mine.length) not(`${role} has no thread to speak on in round ${session.round}, ${session.step}`);
@@ -190,7 +225,7 @@ function turnOf(ctx, role, root) {
 function sheetOf(session, role) {
   const s = seat(session, role);
   const lines = ['## Your seat', '', `You hold the seat of **${s.title}**. ${s.ground}`];
-  if (exists(`roles/${role}.md`)) lines.push('', read(`roles/${role}.md`));
+  if (exists(`roles/${role}.md`, session)) lines.push('', read(`roles/${role}.md`, session));
   return lines;
 }
 
@@ -218,16 +253,16 @@ export function buildContext(ctx, { root, dir, role, phase, save }) {
   if (['track-record', 'docket', 'verdict'].includes(session.phase)) inputs.push(`- The idea ledger: ${ideasPath(root)}`);
   inputs.push(`- Today: ${today()}`);
   if (session.phase === 'examine' || session.phase === 'propose' || session.phase === 'evidence') {
-    inputs.push('', "To see a page as a visitor sees it (the site's, a rival's, any public page), take pictures of it on a desktop and a narrow screen, then open the files it names with your file reader:", '', '```bash', `node "${SCRIPT}" look --root "${root}" --session ${session.id} --url https://example.com/page`, '```');
-    inputs.push('', 'To cite something that is not in the evidence yet, add it first; the reply gives you its id:', '', '```bash', `node "${SCRIPT}" evidence --root "${root}" --session ${session.id} --role ${role} <<'COUNCIL_JSON'`, '{ "evidence": [ { "grade": "observed", "source": "https://example.com/page", "text": "What you saw there, in one sentence" } ] }', 'COUNCIL_JSON', '```');
+    inputs.push('', "To see a page as a visitor sees it (the site's, a rival's, any public page), take pictures of it on a desktop and a narrow screen, then open the files it names with your file reader:", '', '```bash', `node "${scriptOf(session)}" look --root "${root}" --session ${session.id} --url https://example.com/page`, '```');
+    inputs.push('', 'To cite something that is not in the evidence yet, add it first; the reply gives you its id:', '', '```bash', `node "${scriptOf(session)}" evidence --root "${root}" --session ${session.id} --role ${role} <<'COUNCIL_JSON'`, '{ "evidence": [ { "grade": "observed", "source": "https://example.com/page", "text": "What you saw there, in one sentence" } ] }', 'COUNCIL_JSON', '```');
   }
   // In the debate a member sees only its own material; the writers and reviewers afterwards may read the session.
   if (!DOC_STAFF.includes(role)) inputs.push('', 'Read nothing else in the session folder, apart from the pictures the look command gives you: the other files hold what others said, which is not yours to see yet.');
-  const prompt = (rel) => (turn.replace ? read(rel).replaceAll(turn.replace[0], turn.replace[1]) : read(rel));
+  const prompt = (rel) => (turn.replace ? read(rel, session).replaceAll(turn.replace[0], turn.replace[1]) : read(rel, session));
   return [
     ...turn.prompts.map(prompt).flatMap((p) => [p, '']),
     // Every turn, whatever its role, is told that nobody outside the session is contacted.
-    read('_no-contact.md'), '',
+    read('_no-contact.md', session), '',
     ...(turn.sheet ? [...sheetOf(session, role), ''] : []),
     ...(turn.set ? ['## This turn', '', 'This is the second look, after the red team\'s notes on the survivors as a set: follow "The set" above.', ''] : []),
     '## Inputs for this turn', '', ...inputs, '',
@@ -237,4 +272,4 @@ export function buildContext(ctx, { root, dir, role, phase, save }) {
 
 // The line an orchestrator gives a subagent as its whole task.
 export const taskLine = (root, session, role, { save = true } = {}) =>
-  `Run node "${SCRIPT}" context --root "${root}" --session ${session.id} --role ${role} --phase ${session.phase}${save ? ' --save' : ''} and follow the instructions it prints.`;
+  `Run node "${scriptOf(session)}" context --root "${root}" --session ${session.id} --role ${role} --phase ${session.phase}${save ? ' --save' : ''} and follow the instructions it prints.`;

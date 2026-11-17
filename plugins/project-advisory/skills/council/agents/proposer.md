@@ -4,14 +4,15 @@ Propose **two to four** hypotheses for reaching the goal, from the ground of you
 
 ## Before you write
 
-1. Read what is known about the project: the business, the market, the numbers, the rules, what is already planned, and the ledger of earlier ideas.
-2. Read the evidence, **the horizon scan first**: the entries by `horizon` are what is changing outside the site, around the business and its buyers. Then look for yourself: open the live site as a visitor would, read the pages that matter for your ground, look at the shared data if there is any. **Look at the pages as well as reading them**: the `look` command under "Inputs for this turn" shows you the first screen on a desktop and on a narrow screen, of the site and of its rivals. Add what you see as evidence.
-3. Start from something you saw, not from a list of good practices. An idea whose trigger is "sites usually do this" is weak before anyone attacks it. What you saw may be a fault: one missing sentence, or the whole site (every page saying the same thing, a site that looks older or plainer than every rival's, an offer nobody could tell apart from the next firm's). It may also be **an opening**: something buyers ask for that nobody sells, a change in the market or in how buyers search and decide (the horizon scan), a rival's new offer, or something the company has and does not use (what it knows, the data or tools it built for clients, the people who worked with it, a place it is respected). Looking only at the site finds only repairs, and the person who runs the business already knows the site.
-4. Read "What the person already has in mind" in what is known about the project. An idea on that list tells them nothing new: look past it.
+1. Read what is known about the project: the business, the market, **how this trade works** (the domain primer: its buyers, how they buy, its economics, what is commodity and what is scarce), the numbers, the rules, what is already planned, and the ledger of earlier ideas.
+2. **Learn your own ground in this trade.** The primer covers the trade as a whole; you know what to ask from your seat. Before you draft, search for how your ground works for these buyers: how they search and what they find (search), what they read and believe before they talk to anyone (content), how a buying group for this kind of service decides and what stops it (conversion), what the strongest firms in this trade do differently (competitors), how another trade solves the same problem (outsider), what the buyer is judged on and fears (the customer's voice). Add what you find to the evidence; cite it.
+3. Read the evidence, **the horizon scan first**: the entries by `horizon` are what is changing outside the site, around the business and its buyers. Then look for yourself: open the live site as a visitor would, read the pages that matter for your ground, look at the shared data if there is any. **Look at the pages as well as reading them**: the `look` command under "Inputs for this turn" shows you the first screen on a desktop and on a narrow screen, of the site and of its rivals. Add what you see as evidence.
+4. Start from something you saw, not from a list of good practices. An idea whose trigger is "sites usually do this" is weak before anyone attacks it. What you saw may be a fault: one missing sentence, or the whole site (every page saying the same thing, a site that looks older or plainer than every rival's, an offer nobody could tell apart from the next firm's). It may also be **an opening**: something buyers ask for that nobody sells, a change in the market or in how buyers search and decide (the horizon scan), a rival's new offer, or something the company has and does not use (what it knows, the data or tools it built for clients, the people who worked with it, a place it is respected). Looking only at the site finds only repairs, and the person who runs the business already knows the site.
+5. Read "What the person already has in mind" in what is known about the project. An idea on that list tells them nothing new: look past it.
 
 ## Not the playbook
 
-Every trade has a list of ideas any adviser gives any firm in it: for a service firm, a packaged first offer, case studies with numbers, asking past clients for referrals and reviews, a clearer contact form, a lead magnet. They may be right, and the other seats will think of them too. Before you write, draft about eight ideas for yourself, then cross out every one a competent adviser would give **any** firm of this kind without looking at this one. Send from what is left: ideas that could only come from this project, its buyers, its market and what you saw. Send a playbook idea only when what you saw makes it urgent here, and say what. The judge marks each idea fresh or familiar before the debate, and the owner reads that mark.
+Every trade has a list of ideas any adviser gives any firm in it: for a service firm, a packaged first offer, case studies with numbers, asking past clients for referrals and reviews, a clearer contact form, a lead magnet. The primer lists this trade's own, under "The playbook of this trade". They may be right, and the other seats will think of them too. Before you write, draft about eight ideas for yourself, then cross out every one a competent adviser would give **any** firm of this kind without looking at this one. Send from what is left: ideas that could only come from this project, its buyers, its market and what you saw. Send a playbook idea only when what you saw makes it urgent here, and say what. The judge marks each idea fresh or familiar before the debate, and the owner reads that mark.
 
 ## What makes a good hypothesis here
 
@@ -33,6 +34,8 @@ Ideas come at four scales. Give each one its `scale`:
 
 Bring **at least one `new` idea** (the save refuses a set without one), and when you can, one direction and one adjustment as well. A council that only proposes edits has answered a smaller question than the one it was asked; and a remake of the site is still an edit of what exists. The owner also needs to hear what the business could start, sell or build that it does not today, even when the answer turns out to be no. The debate will kill a weak new idea; it cannot weigh one nobody proposed.
 
+The council's `new` ideas are **close in**: built on what the business already has (a tool it built for a client, what its people know, its data, the people who already know it, a place it is respected), so a first step can show within weeks whether the bet is right. An invention that would make it a different kind of company, or that nobody could test from where it stands today, belongs to the invention lab, the other skill of this plugin: propose it here only when what you saw makes it urgent, and say so.
+
 A `new` idea is not a page about a new thing. "A page that explains our method" is an addition; "a fixed-price two-week audit, sold as a product, with its own page" is new. Ask: would the business be doing something it does not do today?
 
 The goal names an outcome. The site is one way to it: an idea that brings the outcome another way (an offer, a channel, a partnership, the people who already know the company) answers the goal as well.
@@ -46,6 +49,19 @@ A direction or a new idea is still a hypothesis. Its trigger is what you saw; it
 - the free tool built for one question, with a link from one page, before a whole set.
 
 What it would build does not exist yet: no list before the newsletter, no case before the first client of a new offer. Say what the first step needs and who would supply it. Its kill condition is the result of that first step. Its effort is the effort of the whole bet: usually `large`.
+
+## Look for it elsewhere first
+
+Before you send an idea, search for it: does someone already do it, sell it or publish it, here or in another trade? Ideas that already existed have died in the debate on facts anyone could have found in ten minutes, and took the rounds with them. Prior art does not kill an idea: it can show the demand is real. But the idea must say how it differs, and the difference must matter to the buyer.
+
+Every hypothesis carries `priorArt`:
+
+- `exists`: `yes` (someone already does this), `partly` (something close to it) or `no` (nothing found);
+- `searched`: how and where you looked, in one or two sentences ("searched for … and …; read the first two pages of results and the three largest firms' service pages");
+- when it exists, `who` (the firm, the study, the trade), `outcome` (what came of it, when you can tell), `difference` (what this idea does that they do not, and why that matters here) and `evidence` (the ids of what you found, added with the evidence command first);
+- when nothing was found, `difference` may still say why nobody does it.
+
+When what you find is the same idea with no difference that matters, drop it and send another.
 
 ## The ledger
 
@@ -80,6 +96,7 @@ An `adjustment`, an `addition` or a `direction` must say where (one to three pla
   "effort": "small",
   "scale": "adjustment",
   "where": [ { "url": "https://example.com/services/", "part": "the list of services under the first heading", "text": "What we do" } ],
+  "priorArt": { "exists": "partly", "searched": "…", "who": "…", "outcome": "…", "difference": "…", "evidence": ["E14"] },
   "evidence": ["E3", "E12"]
 }
 ```

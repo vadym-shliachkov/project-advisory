@@ -13,7 +13,7 @@ const ok = (r) => { assert.deepEqual(r.errors, []); return r; };
 const LONG = 'which is said here at enough length to be a real statement';
 
 const hyp = (n, evidence = []) => ({
-  type: 'hypothesis', title: `Idea ${n}: a case study on the services page`, effort: 'small', scale: 'new', evidence,
+  type: 'hypothesis', priorArt: { exists: 'no', searched: 'Searched for case studies of this kind on rival sites' }, title: `Idea ${n}: a case study on the services page`, effort: 'small', scale: 'new', evidence,
   hypothesis: {
     change: `Publish case study number ${n} with the client's results`,
     effect: 'More enquiries from the services pages, about two a month',

@@ -12,7 +12,7 @@ const LONG = 'which is said here at enough length to be a real statement';
 const ROLES = ['client', 'search', 'content', 'conversion', 'competitors', 'outsider'];
 
 const hyp = (n, extra = {}) => ({
-  type: 'hypothesis', title: `Idea ${n}: a case study on the services page`, effort: 'small', scale: 'new',
+  type: 'hypothesis', priorArt: { exists: 'no', searched: 'Searched for case studies of this kind on rival sites' }, title: `Idea ${n}: a case study on the services page`, effort: 'small', scale: 'new',
   hypothesis: {
     change: `Publish case study number ${n} with the client's results`,
     effect: 'More enquiries from the services pages, about two a month',
@@ -130,13 +130,13 @@ test('status gives every turn the one line that is the agent\'s task', () => {
 
 test('the competitor analyst looks around before anyone proposes, and that turn is optional', () => {
   const { o } = sessionAt('evidence');
-  const turn = status(o).turns[0];
+  const turn = status(o).turns.find((t) => t.role === 'competitors');
   assert.deepEqual([turn.role, turn.optional, turn.done], ['competitors', true, true]);
   const text = context({ ...o, role: 'competitors', save: true });
   assert.ok(text.startsWith('# Reconnaissance'));
   assert.match(text, /evidence --role competitors --root/);
   assert.match(text, /\*\*Never submit a form\.\*\*/, 'the one who looks around is told not to send anything');
-  assert.throws(() => context({ ...o, role: 'search' }), /only the competitor analyst and the horizon scan look around/);
+  assert.throws(() => context({ ...o, role: 'search' }), /only the domain primer, the competitor analyst and the horizon scan look around/);
   assert.equal(next(o).ok, true, 'the session does not wait for an optional turn');
 });
 
@@ -148,7 +148,7 @@ test('the docket shows every idea without its proposer', () => {
   assert.match(text, /The idea ledger: .*ideas\.json/);
   const { ideas: listed } = material('docket');
   assert.equal(listed.length, 6);
-  assert.deepEqual(Object.keys(listed[0]), ['id', 'title', 'hypothesis', 'test', 'effort', 'scale', 'evidence']);
+  assert.deepEqual(Object.keys(listed[0]), ['id', 'title', 'hypothesis', 'test', 'effort', 'scale', 'evidence', 'priorArt']);
   assert.ok(!JSON.stringify(listed).includes('"by"'));
 });
 

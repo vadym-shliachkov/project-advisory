@@ -22,7 +22,7 @@ const LONG = 'which is said here at enough length to be a real statement';
 const errorOf = (r) => (r.errors ?? r).join('\n');
 
 const hyp = (n, extra = {}) => ({
-  type: 'hypothesis', title: `Idea ${n}: a case study on the services page`, effort: n === 3 ? 'medium' : 'small', scale: 'new',
+  type: 'hypothesis', priorArt: { exists: 'no', searched: 'Searched for case studies of this kind on rival sites' }, title: `Idea ${n}: a case study on the services page`, effort: n === 3 ? 'medium' : 'small', scale: 'new',
   hypothesis: {
     change: `Publish case study number ${n} with the client's results`,
     effect: 'More enquiries from the services pages, about two a month',
@@ -84,9 +84,9 @@ const survivor = (idea, extra = {}) => ({
   uncertain: ['Whether visitors read a case study at all on this page.'],
   test: 'Publish one case study and compare contact-page visits; 20 a month counts as working.',
   killCondition: 'No change in contact-page visits after six weeks.', firstStep: 'Pick the client whose results may be published.',
-  fromYou: ['Decide which client may be named on the page.'], ...extra,
+  fromYou: ['Decide which client may be named on the page.'], upside: 'More enquiries from product companies, the group the site serves least today.', ...extra,
 });
-const goodSuggestions = () => ({ summary: 'The session looked for ways to bring more enquiries. Two ideas survived, neither on a measured number, so each is a test to run and not a result.', plan: [{ text: 'Start with the case study: it needs nothing but a yes from the client.', ideas: ['I2'] }, { text: 'Then the second idea, read against the first.', ideas: ['I4'] }], survivors: [survivor('I2'), survivor('I4')], bets: [{ idea: 'I1', sentence: 'Publish the first case study as a product of its own, sold apart from the site work.', worthIt: 'Worth trying if one client agrees to be named and the next five enquirers are asked about it.' }], questions: [] });
+const goodSuggestions = () => ({ summary: 'The session looked for ways to bring more enquiries. Two ideas survived, neither on a measured number, so each is a test to run and not a result.', plan: [{ text: 'Start with the case study: it needs nothing but a yes from the client.', ideas: ['I2'] }, { text: 'Then the second idea, read against the first.', ideas: ['I4'] }], survivors: [survivor('I2'), survivor('I4')], killed: [{ idea: 'I1', what: 'A long case study on the services page, published as it was first proposed.', strongestPoint: 'Buyers in this trade do ask for proof before they write.', killedBy: 'Nobody could say why a customer would read a case study that long.', couldReturn: 'Only as a short case study, which survived in another form.' }], bets: [{ idea: 'I1', sentence: 'Publish the first case study as a product of its own, sold apart from the site work.', worthIt: 'Worth trying if one client agrees to be named and the next five enquirers are asked about it.' }], questions: [] });
 
 function chapters(d) {
   const speech = (speaker, refs, text) => ({ speaker, refs, text: `${text}, ${LONG}` });
@@ -299,7 +299,8 @@ test('both documents are written as HTML from the record: verdicts by the script
   assert.deepEqual(status(d.o).turns.map((t) => t.done), [true, true]);
   const moved = d.ok(next(d.o));
   assert.equal(moved.to.phase, 'review');
-  assert.match(moved.warnings[0], /No Chrome, Edge or Chromium was found, so suggestions\.html is the document/);
+  assert.ok(moved.warnings.some((w) => /No Chrome, Edge or Chromium was found, so suggestions\.html is the document/.test(w)));
+  assert.ok(moved.warnings.some((w) => /so brief\.html is the document/.test(w)));
   assert.equal(moved.documents.discussion.pdf, null);
 
   const talk = fs.readFileSync(path.join(d.dir, 'discussion.html'), 'utf8');
@@ -373,7 +374,8 @@ test('with a browser the documents are printed, and each printing gets a layout 
     assert.ok(moved.documents.suggestions.pages >= 2, 'the suggestions have a first page and at least one more');
     assert.ok(moved.documents.discussion.pages >= 2);
     assert.ok(fs.statSync(moved.documents.discussion.pdf).size > 10000);
-    assert.deepEqual(status(d.o).turns.map((t) => t.role), ['fidelity', 'critic', 'layout-suggestions', 'layout-discussion']);
+    assert.deepEqual(status(d.o).turns.map((t) => t.role), ['fidelity', 'critic', 'layout-brief', 'layout-suggestions', 'layout-discussion']);
+    assert.ok(moved.documents.brief.pages >= 1);
     const layout = context({ ...d.o, role: 'layout-discussion', save: true });
     assert.ok(layout.startsWith('# Layout review of a rendered document'));
     assert.match(layout, /"doc": "discussion", "pagesSeen": \d+/);
@@ -389,6 +391,7 @@ test('with a browser the documents are printed, and each printing gets a layout 
     assert.equal(status(d.o).turns.find((t) => t.role === 'layout-discussion').done, true, 'and after two rounds it is not asked for again');
     const closed = d.ok(close({ ...d.o, force: true }));
     assert.match(closed.documents.discussion, /discussion\.pdf$/);
+    assert.match(closed.documents.brief, /brief\.pdf$/);
     assert.deepEqual(closed.highLayoutDefects, ['discussion, page 1: Half the page is empty']);
   } finally {
     process.env.COUNCIL_NO_BROWSER = '1';
@@ -430,4 +433,50 @@ test('the narrator can set the order of the chapters, and a speaker who goes str
   const html = fs.readFileSync(path.join(d.dir, 'discussion.html'), 'utf8');
   assert.equal(html.match(/<p class="speaker">Dr Lucius Graves<span class="seat">, The red team<\/span><\/p>/g).length, 1);
   assert.equal(html.match(/class="speech speech-on"/g).length, 1);
+});
+
+// ---- The decision brief and the session's pages ----
+
+// Every relative link of every page of the site leads to a file that exists.
+function brokenLinks(siteDir) {
+  const broken = [];
+  const walk = (dir) => fs.readdirSync(dir, { withFileTypes: true }).flatMap((e) => (e.isDirectory() ? walk(path.join(dir, e.name)) : e.name.endsWith('.html') ? [path.join(dir, e.name)] : []));
+  for (const file of walk(siteDir)) {
+    const html = fs.readFileSync(file, 'utf8');
+    for (const [, href] of html.matchAll(/(?:href|src)="([^"#]+)(?:#[^"]*)?"/g)) {
+      if (/^(https?:|mailto:)/.test(href)) continue;
+      if (!fs.existsSync(path.resolve(path.dirname(file), href))) broken.push(`${path.relative(siteDir, file)} -> ${href}`);
+    }
+  }
+  return broken;
+}
+
+test('the decision brief and the session pages show every idea, each analysed, and nothing ranked', () => {
+  const d = written();
+  d.ok(save({ root: d.root, doc: 'discussion' }, stdin({ closing: d.all.closing, chapters: d.all.chapters.slice(2) })));
+  const moved = d.ok(next(d.o));
+  assert.ok(moved.documents.brief.html.endsWith('brief.html'));
+
+  const brief = fs.readFileSync(path.join(d.dir, 'brief.html'), 'utf8');
+  for (const part of ['Council · Decision brief', 'class="decision-brief"', 'The ideas that survived', 'none ranked above another', '<dt>If it works</dt>', 'More enquiries from product companies', '<dt>Drop it if</dt>', '<dt>Needs from you</dt>', 'Bold ideas the council could not prove', '<dt>Its strongest point</dt>', 'Buyers in this trade do ask for proof', 'Where the rest is', 'site/index.html']) assert.ok(brief.includes(part), part);
+  assert.ok(!brief.includes('Your answer'), 'the brief is read, not filled in');
+  for (const idea of d.model().ideas) assert.ok(brief.includes(idea.title.replace(/&/g, '&amp;')) || brief.includes(idea.originalTitle), `every idea is in the brief: ${idea.id}`);
+
+  const site = path.join(d.dir, 'site');
+  const index = fs.readFileSync(path.join(site, 'index.html'), 'utf8');
+  for (const part of ['<a class="skip" href="#main">', '<main id="main">', '<nav class="site-nav" aria-label="Session pages">', 'aria-current="page"', 'Every idea the council looked at', '<caption>', '<th scope="col" data-type="number"><button type="button">', 'role="status"', 'href="ideas/I2.html"', 'href="style.css"']) assert.ok(index.includes(part), part);
+  assert.ok(!/fonts\.googleapis/.test(index), 'the pages load nothing from the web');
+  const killed = d.model().killed[0];
+  const dead = fs.readFileSync(path.join(site, 'ideas', `${killed.id}.html`), 'utf8');
+  for (const part of ['<dt>Its strongest point</dt>', '<dt>Could it return</dt>', 'As it was proposed', 'Looked for elsewhere first', 'Nothing like it was found', 'How it was argued', 'class="record"', 'Ruling: killed']) assert.ok(dead.includes(part), part);
+  const lived = fs.readFileSync(path.join(site, 'ideas', 'I2.html'), 'utf8');
+  for (const part of ['<dt>If it works</dt>', 'The case for it', 'Attack: the evidence is weak or reads another way', 'href="../evidence.html#E1"', 'Chapter II of the discussion']) assert.ok(lived.includes(part), part);
+  assert.match(fs.readFileSync(path.join(site, 'evidence.html'), 'utf8'), /<tr id="E1">/);
+  assert.ok(fs.existsSync(path.join(site, 'discussion', '1.html')));
+  assert.ok(fs.existsSync(path.join(site, 'method.html')));
+  assert.deepEqual(brokenLinks(site), []);
+
+  const history = fs.readFileSync(path.join(d.root, '.project-health', 'ideas.html'), 'utf8');
+  for (const part of ['Every idea, every session', 'Changed in the latest session', 'href="council/', '/site/ideas/I2.html"', 'href="cache/site.css"']) assert.ok(history.includes(part), part);
+  assert.match(fs.readFileSync(path.join(d.root, '.project-health', '.gitignore'), 'utf8'), /^ideas\.html$/m);
 });

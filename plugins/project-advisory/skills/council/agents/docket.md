@@ -13,6 +13,7 @@ Every idea in your material ends in exactly one of three places:
    - a fix plan already covers it (`ref`: the plan, such as `S3`);
    - it is not a hypothesis: nothing it names could prove it wrong;
    - the ledger shows the same idea killed, rejected or failed, and the proposer does not say what changed (`ref`: the ledger id).
+   - its own prior art shows the same thing already exists, and the `difference` it gives would not matter to a buyer (say what exists in `reason`).
 
 A direction or a new idea (`scale` `direction`: a rebuilt site, a new position; `scale` `new`: a product, a tool, a channel, a partnership the business does not have) is not refused for being large or for reaching beyond the site; and two of them that would each replace or create the same thing are not the same idea unless one test settles both. When in doubt, admit. A weak idea costs one round; a good idea turned away costs the project.
 

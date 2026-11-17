@@ -294,3 +294,52 @@ h2.group { break-before: page; margin-bottom: var(--sp-1); }
 .bet { margin: 0 0 var(--sp-5); padding-top: var(--sp-3); border-top: 1px solid var(--line); max-width: 170mm; break-inside: avoid; }
 .bet-head { margin: 0 0 var(--sp-2); }
 .bet > p { max-width: var(--prose); }
+
+/* ---- The invention lab's bets ----
+   Each bet opens as a press release from the day it worked, set apart like a cutting; the riskiest assumption is marked. */
+.press { margin: var(--sp-3) 0 var(--sp-4); padding: var(--sp-4) var(--sp-5); border: 1px solid var(--line); border-top: 3pt solid var(--accent); border-radius: 0 0 var(--radius) var(--radius); max-width: 170mm; break-inside: avoid; }
+.press-kicker { margin: 0 0 var(--sp-1); font-size: var(--t-xs); text-transform: uppercase; letter-spacing: 0.12em; color: var(--muted); }
+.press-head { margin: 0 0 var(--sp-1); font-family: var(--serif); font-size: var(--t-lg); text-transform: none; letter-spacing: 0; color: var(--ink); }
+.press-sub { font-weight: 600; color: var(--ink); }
+.press-quote { margin: var(--sp-3) 0 0; padding-left: var(--sp-3); border-left: 2pt solid var(--line); font-family: var(--serif); font-style: italic; color: var(--ink); }
+.faq { margin: var(--sp-4) 0 0; max-width: 170mm; }
+.faq dt { font-weight: 600; color: var(--ink); margin-top: var(--sp-2); }
+.faq dd { margin: 2pt 0 0; }
+ol.must { padding-left: 16pt; }
+ol.must li.riskiest { color: var(--ink); font-weight: 600; }
+.tag-riskiest { color: var(--bad); }
+.tag-upside-transformative { color: var(--good); font-weight: 600; }
+table.wall td:first-child { width: 55%; }
+
+/* ---- The decision brief ----
+   Its own page box: the band is not bled to the edge, so the brief runs on from its first page with the same margins.
+   Every idea is a short block that stays whole on its page. */
+body.decision-brief { page: brief; }
+@page brief {
+  size: A4; margin: 14mm 16mm 18mm;
+  @bottom-right { content: counter(page); font: 8pt "IBM Plex Sans", "Segoe UI", Arial, sans-serif; color: #667085; }
+}
+@page brief:first { margin: 14mm 16mm 18mm; }
+.decision-brief .band { padding: 8mm 10mm 7mm; border-radius: var(--radius); }
+.decision-brief .glance { padding: var(--sp-5) 0 0; }
+/* The plan may run on to the next page rather than leave the first one half empty. */
+.decision-brief .start { break-inside: auto; }
+.decision-brief .start li { break-inside: avoid; }
+/* A heading and its lead stay with the first idea under them. */
+.b-part > .lead { break-after: avoid; }
+.b-part { margin-top: var(--sp-6); }
+.b-part > h2 { font-size: var(--t-xl); }
+.b-idea { margin: 0 0 var(--sp-4); padding-top: var(--sp-3); border-top: 1px solid var(--line); max-width: 178mm; break-inside: avoid; }
+.b-head { display: flex; gap: var(--sp-3); align-items: baseline; margin: 0 0 var(--sp-1); font-size: var(--t-md); line-height: 1.3; color: var(--ink); break-after: avoid; }
+.b-head .stamp { margin-left: var(--sp-2); vertical-align: 1pt; }
+.b-no { font-family: var(--serif); font-weight: 600; color: var(--accent); min-width: 7mm; }
+.b-title b, .b-title a { font-family: var(--serif); }
+.b-idea .tags { margin: 0 0 var(--sp-2); }
+.b-lede { margin: 0 0 var(--sp-2); color: var(--ink); max-width: var(--prose); }
+.decide.b-facts { margin: 0; padding: var(--sp-1) var(--sp-3); }
+.decide.b-facts > div { grid-template-columns: 28mm 1fr; padding: var(--sp-1) 0; }
+.b-more ul { padding-left: 14pt; }
+
+/* In the bets a bet runs on after the one before; its last line stays with it. */
+.bets-doc .idea + .idea { break-before: auto; margin-top: var(--sp-7); padding-top: var(--sp-5); border-top: 1px solid var(--line); }
+.bets-doc .idea-foot, .bets-doc .faq { break-before: avoid; }

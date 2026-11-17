@@ -22,7 +22,7 @@ const ok = (r) => { assert.deepEqual(r.errors, []); return r; };
 
 const PLACE = { url: 'https://acme.test/services', part: 'the list of services under the first heading', text: 'What we do' };
 const hyp = (n, extra = {}) => ({
-  type: 'hypothesis', title: `Idea ${n}: a case study on the services page`, effort: 'small', scale: 'new',
+  type: 'hypothesis', priorArt: { exists: 'no', searched: 'Searched for case studies of this kind on rival sites' }, title: `Idea ${n}: a case study on the services page`, effort: 'small', scale: 'new',
   hypothesis: {
     change: `Publish case study number ${n} with the client's results`,
     effect: 'More enquiries from the services pages, about two a month',
@@ -123,8 +123,8 @@ test('the horizon scan looks outside the site before anyone proposes; an opening
   next(o);
   evidence({ root, collect: true });
   const listed = status(o).turns;
-  assert.deepEqual(listed.map((t) => [t.role, t.optional]), [['competitors', true], ['horizon', true]]);
-  assert.match(status(o).next, /Start the competitor analyst and the horizon scan, at once/);
+  assert.deepEqual(listed.map((t) => [t.role, t.optional]), [['primer', true], ['competitors', true], ['horizon', true]]);
+  assert.match(status(o).next, /Start the domain primer, the competitor analyst, the horizon scan, at once/);
   const text = context({ root, role: 'horizon', save: true });
   assert.match(text, /^# The horizon scan/);
   assert.match(text, /evidence --role horizon/);
@@ -186,13 +186,14 @@ const survivor = (idea, extra = {}) => ({
   uncertain: ['Whether visitors read a case study at all on this page.'],
   test: 'Publish one case study and compare contact-page visits; 20 a month counts as working.',
   killCondition: 'No change in contact-page visits after six weeks.', firstStep: 'Pick the client whose results may be published.',
-  fromYou: ['Decide which client may be named on the page.'], ...extra,
+  fromYou: ['Decide which client may be named on the page.'], upside: 'More enquiries from product companies, the group the site serves least today.', ...extra,
 });
 const writeUp = (ids) => ({
   summary: 'The session looked for ways to bring more enquiries. Two ideas survived, neither on a measured number, so each is a test to run and not a result.',
   plan: [{ text: 'Start with the services page: it needs nothing but a yes.', ideas: [ids.services] }],
   survivors: [survivor(ids.services), survivor(ids.about, { sentence: 'Retell the company story in the paragraph under Our story on [the about page](https://acme.test/about).' })],
   bets: [{ idea: ids.bet, sentence: 'Sell the first case study as a product of its own, apart from the site work.', worthIt: 'Worth trying if the next five people who write are asked whether they would buy it.' }],
+  killed: [{ idea: ids.bet, what: 'Sell the first case study as a product of its own, apart from the site work.', strongestPoint: 'It would turn work already done into something buyers can try first.', killedBy: 'Its first step could not tell real interest from politeness.', couldReturn: 'With a first step that asks for a commitment, such as a paid pilot.' }],
   questions: [],
 });
 

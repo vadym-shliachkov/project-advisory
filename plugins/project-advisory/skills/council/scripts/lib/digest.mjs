@@ -1,5 +1,6 @@
 import { loadFacts, loadKnowledge, latestRoadmap, staleMetrics, KIND_TITLES } from './bank.mjs';
 import { loadIdeas, ideaLine, trackRecord } from './ideas.mjs';
+import { primerLines } from './primer.mjs';
 
 // What the council needs from the knowledge bank, as Markdown for its agents: the goal and the business, the market,
 // the numbers, the rules agreed with the people, what a roadmap already plans, and the whole idea ledger.
@@ -41,6 +42,7 @@ export function recordLine(total, r) {
 
 export function digest(root) {
   const facts = loadFacts(root);
+  const primer = primerLines(root);
   const knowledge = loadKnowledge(root);
   const ideas = loadIdeas(root);
   return [
@@ -53,6 +55,10 @@ export function digest(root) {
     // looks past it, at what the list leaves out.
     ...section('What the person already has in mind', factLines(facts, ['owner'])),
     ...section('Market', factLines(facts, ['market'])),
+    // How the trade works, from the domain primer: read before proposing, so the debate is not spent on what any
+    // insider knows. Its playbook is what to look past.
+    ...section('How this trade works', primer.trade),
+    ...section('The playbook of this trade', primer.playbook),
     ...section('Numbers', factLines(facts, ['metric'], { history: true, stale: staleMetrics(facts) })),
     ...section('Rules to respect', [
       ...(knowledge.notes.length ? ['An idea that breaks a "Not allowed" or "Constraints" line is turned away. Do not ask again what a "Decisions taken" line settled.'] : []),

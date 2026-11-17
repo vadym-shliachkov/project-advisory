@@ -36,25 +36,28 @@ export function roman(n) {
   return out;
 }
 
-const css = () => fs.readFileSync(path.join(SKILL_DIR, 'templates', 'document.css'), 'utf8');
+export const css = (name = 'document.css') => fs.readFileSync(path.join(SKILL_DIR, 'templates', name), 'utf8');
 
-function page({ title, kind, model, body }) {
+// One page. A printed document carries its styles and loads its fonts; a page of the session's site links the site's
+// stylesheet (`stylesheet`, relative to the page), loads nothing from the web, and carries the site's navigation.
+export function page({ title, kind, model, body, stylesheet = null, nav = '', bandTitle = title }) {
   const bg = model.brand.color ?? DEFAULT_BAND;
   const fg = contrast(bg, '#ffffff') >= contrast(bg, '#111111') ? '#ffffff' : '#111111';
   // The brand colour is the one accent when it is dark enough to read as text on white; otherwise a neutral ink.
   const accent = contrast(bg, '#ffffff') >= 4.5 ? bg : DEFAULT_BAND;
+  const styles = stylesheet ? `<meta name="viewport" content="width=device-width, initial-scale=1">\n<link rel="stylesheet" href="${esc(stylesheet)}">` : `${FONTS}\n<style>${css().replace(/<\/style/gi, '')}</style>`;
   return `<!doctype html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
 <title>${esc(title)}</title>
-${FONTS}
-<style>${css().replace(/<\/style/gi, '')}</style>
+${styles}
 <style>:root { --accent: ${accent}; } .band { --band-bg: ${bg}; --band-fg: ${fg}; }</style>
 </head>
 <body class="${kind}">
-<header class="band"><h1 class="band-name">${esc(model.brand.name)}</h1><p class="band-meta"><span>${esc(title)}</span><span>${esc(longDate(model.session.id))}</span></p></header>
-${body}
+${stylesheet ? '<a class="skip" href="#main">Skip to the content</a>\n' : ''}<header class="band"><h1 class="band-name">${esc(model.brand.name)}</h1><p class="band-meta"><span>${esc(bandTitle)}</span><span>${esc(longDate(model.session.id))}</span></p></header>
+${nav}
+${stylesheet ? `<main id="main">\n${body}\n</main>` : body}
 </body>
 </html>
 `;
@@ -77,22 +80,22 @@ export function readerText(text, nameOf) {
 }
 
 const STAMPS = { survived: 'Survived', narrowed: 'Survived, smaller', killed: 'Killed', undecided: 'Undecided' };
-const stamp = (verdict) => `<span class="stamp stamp-${verdict}">${STAMPS[verdict] ?? esc(verdict)}</span>`;
-const tag = (text, kind = '') => `<span class="tag${kind ? ` tag-${kind}` : ''}">${esc(text)}</span>`;
-const STRENGTH_NOTE = {
+export const stamp = (verdict) => `<span class="stamp stamp-${verdict}">${STAMPS[verdict] ?? esc(verdict)}</span>`;
+export const tag = (text, kind = '') => `<span class="tag${kind ? ` tag-${kind}` : ''}">${esc(text)}</span>`;
+export const STRENGTH_NOTE = {
   strong: 'Rests on a number that was measured.',
   fair: 'Rests on something that was seen: on the site, in the project, at a competitor.',
   speculative: 'Rests on argument alone. Worth a cheap test, nothing more.',
 };
-const SCALE_NOTE = { new: 'Something the business does not do or have at all: an offer, a tool, a channel, a partnership, an audience. A decision for you; its test is a first step.', direction: 'A remake of what is there: the site or a part of it, the position, the first offer. A decision for you; its test is a first step.', addition: 'Something new beside what is there on the site: a page, a section, a kind of content.', adjustment: 'A change to what is already there.' };
+export const SCALE_NOTE = { new: 'Something the business does not do or have at all: an offer, a tool, a channel, a partnership, an audience. A decision for you; its test is a first step.', direction: 'A remake of what is there: the site or a part of it, the position, the first offer. A decision for you; its test is a first step.', addition: 'Something new beside what is there on the site: a page, a section, a kind of content.', adjustment: 'A change to what is already there.' };
 const EFFORT_NOTE = { small: 'A change to what is already there.', medium: 'New content or a new part of the site.', large: 'Work across the site, or something the company has to supply.' };
 const chips = (pairs) => `<div class="counts">${pairs.filter(([n]) => n !== null).map(([n, label, kind]) => `<span class="count${kind ? ` count-${kind}` : ''}"><b>${esc(n)}</b> ${esc(label)}</span>`).join('')}</div>`;
-const table = (cls, head, rows) => (rows.length ? `<table class="${cls}"><thead><tr>${head.map((h) => `<th scope="col">${esc(h)}</th>`).join('')}</tr></thead><tbody>${rows.join('')}</tbody></table>` : '');
+export const table = (cls, head, rows) => (rows.length ? `<table class="${cls}"><thead><tr>${head.map((h) => `<th scope="col">${esc(h)}</th>`).join('')}</tr></thead><tbody>${rows.join('')}</tbody></table>` : '');
 const seatLine = (s) => (s ? `${esc(s.name)}, ${esc(s.title.replace(/^The /, 'the '))}` : '');
 // A long address or file path may break anywhere rather than push a table off the page.
 const source = (s) => esc(s ?? '').replace(/([^:/])\/(?=[^/])/g, '$1/<wbr>').replace(/(\?|&amp;)/g, '<wbr>$1');
 // It may also have been cut short in the middle of a sentence: then it ends at the last whole one.
-function evidenceText(e) {
+export function evidenceText(e) {
   let text = String(e.text ?? '');
   let note = '';
   if (String(e.source ?? '').startsWith('finding ')) {
@@ -105,7 +108,7 @@ function evidenceText(e) {
 }
 const evidenceItem = (e, plain = (t) => t) => `<li><span class="ev-id">${esc(e.id)}</span> ${esc(plain(evidenceText(e)))} <span class="ev-src">${esc(e.grade)}${e.source ? ` · ${sourceLink(e.source)}` : ''}</span></li>`;
 
-function countChips(model) {
+export function countChips(model) {
   const c = model.counts;
   return chips([
     [c.proposed, 'proposed'], [c.admitted, 'debated'],
@@ -116,7 +119,7 @@ function countChips(model) {
   ]);
 }
 
-function methodSection(model, key = '') {
+export function methodSection(model, key = '') {
   const seats = model.cast.filter((s) => s.role !== 'librarian');
   const rows = seats.map((s) => `<tr><td><b>${esc(s.title)}</b></td><td>${esc(s.ground)}</td><td>${esc(s.model === 'strongest' ? 'Strongest model' : 'Standard model')}</td></tr>`);
   const g = model.grades;
@@ -144,13 +147,13 @@ ${key}
 
 const isWeb = (s) => /^https?:\/\//i.test(String(s ?? ''));
 // A source the reader can open is a link; its text is the address itself, so it says where it goes.
-const sourceLink = (s) => (isWeb(s) ? `<a href="${esc(s)}">${source(s)}</a>` : source(s));
-const shortAddress = (url) => { try { const u = new URL(url); return `${u.hostname.replace(/^www\./, '')}${u.pathname === '/' ? '' : u.pathname}`; } catch { return url; } };
+export const sourceLink = (s) => (isWeb(s) ? `<a href="${esc(s)}">${source(s)}</a>` : source(s));
+export const shortAddress = (url) => { try { const u = new URL(url); return `${u.hostname.replace(/^www\./, '')}${u.pathname === '/' ? '' : u.pathname}`; } catch { return url; } };
 const ideaLinks = (nums) => nums.map((n) => `<a href="#idea-${esc(n.id)}">idea ${n.no}</a>`).join(', ');
 
 // Where an idea applies: each place as a link the reader can open and, when it was photographed, the part of the page
 // with an outline around it. A place that could not be found says so under the top of its page.
-function whereBlock(places, { heading = true } = {}) {
+export function whereBlock(places, { heading = true } = {}) {
   if (!places.length) return '';
   const item = (p) => {
     const link = `<a href="${esc(p.url)}">${esc(shortAddress(p.url))}</a>`;
@@ -162,7 +165,7 @@ function whereBlock(places, { heading = true } = {}) {
   return `<div class="where">${heading ? '<h5>Where</h5>' : ''}${places.map(item).join('')}</div>`;
 }
 
-function ideaArticle(model, idea, s, n, chapterNo, plain, picture, parts = () => []) {
+export function ideaArticle(model, idea, s, n, chapterNo, plain, picture, parts = () => []) {
   const places = parts(idea.thread);
   // An idea with no picture yet still links its places.
   const placesHtml = whereBlock(places.length ? places : (idea.where ?? []).map((w) => ({ ...w, file: null })));
@@ -316,7 +319,7 @@ ${model.merged.length ? `<h3>Merged into another idea</h3>${table('merged', ['Id
 
 // ---- The discussion ----
 
-function chapterHtml(model, chapter, n, usedEvidence, plain, placesOf = () => []) {
+export function chapterHtml(model, chapter, n, usedEvidence, plain, placesOf = () => []) {
   const idea = model.ideas.find((i) => i.thread === chapter.thread);
   // The seat stands beside the name: the reader should not have to remember who speaks for what.
   const speaker = (role) => { const s = model.cast.find((x) => x.role === role); return s ? `${esc(s.name)}<span class="seat">, ${esc(s.title)}</span>` : esc(role); };

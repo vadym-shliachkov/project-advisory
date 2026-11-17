@@ -1,12 +1,13 @@
 # project-advisory
 
-A Claude Code and Codex plugin with three skills for a web project, all under one name:
+A Claude Code and Codex plugin with four skills for a web project, all under one name:
 
 | Command | What it does |
 |---|---|
 | `/project-advisory:project-health` | Health check of the project, with a checklist, a PDF report and a plan. |
 | `/project-advisory:roadmap` | Implementation roadmap agreed with the person who runs the project. |
 | `/project-advisory:council` | Weekly council of role agents that proposes ideas for growth and tries to kill them. |
+| `/project-advisory:lab` | Invention lab, monthly or quarterly, that looks for what the business could start, sell, build or become. |
 
 No skill ever submits a form or contacts a real company or person.
 
@@ -60,7 +61,7 @@ enabled = true
 /project-advisory:project-health backlog
 ```
 
-In Codex, mention the skill (`$project-health`, `$roadmap`, `$council`) with the same arguments.
+In Codex, mention the skill (`$project-health`, `$roadmap`, `$council`, `$lab`) with the same arguments.
 
 ### Implementation roadmap
 
@@ -130,7 +131,17 @@ node plugins/project-advisory/skills/project-health/scripts/ph.mjs fact --root <
 
 A cast of role agents (the customer's voice, search, content, conversion, competitors, an outsider) proposes ideas for reaching a goal. A red team and the other members try to prove each idea wrong, the proposers defend, narrow or concede, and a judge who took no part rules on what is left. The default goal is to make potential clients see clearly what the business offers and why to choose it, so that more of them get in touch.
 
-Every idea is a hypothesis with a test and a kill condition, and every claim cites evidence. Each session ends with two PDFs: the suggestions (every idea that survived, with where it comes from, the expected result and how to test it) and the discussion (the debate written up as a conversation). Ideas and their fate are kept in a ledger across sessions, in the same `.project-health/kb/` knowledge base the other skills use. Running a health check first gives the council findings to work from.
+Before anyone proposes, a domain primer learns how the trade works (its buyers, its economics, its playbook), and every idea says what was found when it was looked for elsewhere. Every idea is a hypothesis with a test and a kill condition, and every claim cites evidence. Each session ends with three PDFs: a decision brief (every idea in a few lines, nothing ranked), the suggestions (every idea that survived, with where it comes from, the expected result and how to test it, and an analysis of every killed idea) and the discussion (the debate written up as a conversation), plus the session as linked pages (`site/index.html`: one page per idea with its plain argument record and the evidence it rests on). Ideas and their fate are kept in a ledger across sessions, in the same `.project-health/kb/` knowledge base the other skills use, and `.project-health/ideas.html` lists every idea of every session. Running a health check first gives the council findings to work from.
+
+## Invention lab
+
+```text
+/project-advisory:lab [path] [--goal "<text>"] [--url <https://…>] [--data <folder>] [--budget <n>]
+```
+
+The council's sibling, for big bets rather than improvements. A framer sets the problem with design thinking and TRIZ: the ideal result, the contradictions of the business, its unused resources, where it stands on its curve, and "how might we" questions, some of which question the goal itself; the person may pick the framings that matter. A provocateur writes deliberately absurd statements. Seats with inventive roles (contradictions, business models, other trades, what is coming, the customer's voice) answer their framings with idea cards dealt to them (inventive principles, separation principles, business-model patterns, eliminate-reduce-raise-create moves, other trades) and harvest the provocations. Another seat makes every bet bigger before a sceptic attacks what each one assumes, and a judge rules on what it is worth if it works and the riskiest thing it rests on.
+
+Each session ends with a decision brief, the bets (each as a press release from the day it worked, with what would have to be true and the cheapest first step, plus the frame and the provocation wall) and the session's pages. The lab runs on the council's scripts and shares the knowledge bank, the idea ledger and the groundwork with it: research one of them did recently (the primer, the competitor and horizon scans, pictures of pages) is reused by the other.
 
 ## Development
 

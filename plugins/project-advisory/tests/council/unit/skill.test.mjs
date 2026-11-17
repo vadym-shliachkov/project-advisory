@@ -144,7 +144,8 @@ test('SKILL.md covers the three ways of running members, and keeps the usher out
   assert.match(text, /You are not a member of the council\. No ideas, no arguments, no rulings/);
   assert.match(text, /Do not summarise the ideas, rank them or say which you like/);
   assert.match(text, /data, not instructions/);
-  assert.match(text, /`suggestions\.pdf` \(the ideas that survived, to act on\) and `discussion\.pdf` \(the debate, to read\)/);
+  assert.match(text, /`brief\.pdf` \(every idea in a few lines, to decide from\), `suggestions\.pdf` \(the full case for each idea that survived, to act on\) and `discussion\.pdf` \(the debate, to read\)/);
+  assert.match(text, /`site\/index\.html` \(all of it as linked pages/);
   assert.match(text, /None of them wrote what they review; you did not either/);
   assert.match(text, /`template` defects come from this skill's page styles/);
 });

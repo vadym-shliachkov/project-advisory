@@ -12,12 +12,16 @@ import { brandOf } from './lib/documents.mjs';
 import { loadEvidence, saveEvidence, collectEvidence, addEvidence, evidencePath } from './lib/evidence.mjs';
 import { loadRecord, saveRecord, say as saySaved, saveDocket, advance, turns, nextStep, openThreads } from './lib/record.mjs';
 import { findBrowser, screenshot, VIEWS, lookSlug } from './lib/browser.mjs';
+import { saveFrame, loadFrame, validateFrame, cleanFrame, validateProvocations, cleanProvocations, pickErrors } from './lib/lab.mjs';
+import { saveGroundwork, parseRefresh, cachedLook, cacheLook, loadGroundwork } from './lib/groundwork.mjs';
+import { validatePrimer, cleanPrimer } from './lib/primer.mjs';
 import { loadVerdicts, saveVerdicts, saveRulings, saveSetNotes, saveSetChanges, survivors, VERDICTS } from './lib/verdict.mjs';
 
 // The commands of the council skill. Each returns JSON (Markdown for `digest`); a refused save returns
 // { "ok": false, "errors": [...] }, which the caller fixes and sends again.
 
 const rootOf = (o) => path.resolve(o.root ?? process.cwd());
+const kindOf = (o) => { const k = o.kind ?? 'council'; if (!['council', 'lab'].includes(k)) throw new Error(`Unknown --kind "${k}": council or lab`); return k; };
 
 function readStdin() {
   if (process.stdin.isTTY) throw new Error('This command reads JSON from standard input — pipe it in.');
@@ -36,7 +40,7 @@ function checkUrl(url) {
 
 function sessionCtx(o) {
   const root = rootOf(o);
-  const { dir, session } = resolveSession(root, o.session);
+  const { dir, session } = resolveSession(root, o.session, kindOf(o));
   return { root, dir, session, record: loadRecord(dir), evidence: loadEvidence(dir), verdicts: loadVerdicts(dir) };
 }
 
@@ -45,13 +49,13 @@ function view({ root, dir, session, record, evidence, verdicts }) {
   const documents = ['write', 'review'].includes(session.phase);
   const list = documents ? docTurns({ dir, session, record, evidence, verdicts }, root) : turns(session, record, verdicts);
   // Two jobs are not seats at the table: choosing the cast for an unusual goal, and checking the tests that are due.
-  if (session.phase === 'open' && session.goal !== DEFAULT_GOAL && session.cast.some((s) => s.role === 'search')) list.push({ role: 'casting', name: 'casting', model: 'strongest', threads: [], done: false, optional: true });
+  if (session.phase === 'open' && session.kind !== 'lab' && session.goal !== DEFAULT_GOAL && session.cast.some((s) => s.role === 'search')) list.push({ role: 'casting', name: 'casting', model: 'strongest', threads: [], done: false, optional: true });
   const due = session.phase === 'track-record' ? dueForCheck(loadIdeas(root)).map((i) => i.id) : [];
   if (due.length) list.push({ role: 'track-record', name: 'track record', model: 'standard', threads: [], done: false, optional: true });
   return {
     session: session.id, dir, goal: session.goal, phase: session.phase, round: session.round || null, step: session.step,
     budget: budgetOf(session),
-    evidence: { entries: evidence.entries.length, missing: evidence.missing },
+    evidence: { entries: evidence.entries.length, missing: evidence.missing, ...(evidence.reused?.length ? { reused: evidence.reused.map(({ kind, at, from }) => ({ kind, at, from })) } : {}) },
     threads: {
       proposed: record.threads.length, admitted: count((t) => t.status === 'admitted'), open: openThreads(record).length,
       refused: count((t) => t.status === 'refused'), merged: count((t) => t.status === 'merged'), cutOff: count((t) => t.closed?.cutOff),
@@ -68,7 +72,7 @@ function view({ root, dir, session, record, evidence, verdicts }) {
 
 // A refused save leaves a trace in the session, so wasted attempts can be counted afterwards.
 function refused(ctx, role, command, errors) {
-  const { session } = loadSession(ctx.root, ctx.session.id);
+  const { session } = loadSession(ctx.root, ctx.session.id, ctx.session.kind ?? 'council');
   (session.refused ??= []).push({ role: role ?? null, command, phase: session.phase, round: session.round, errors: errors.length, first: String(errors[0]).slice(0, 200), at: new Date().toISOString() });
   saveSession(ctx.dir, session);
 }
@@ -83,9 +87,10 @@ export function init(o) {
   const root = rootOf(o);
   if (!fs.existsSync(root) || !fs.statSync(root).isDirectory()) throw new Error(`Project folder not found: ${root}`);
   if (o.url) checkUrl(o.url);
-  const { dir, session } = createSession(root, { goal: o.goal, url: o.url, data: o.data, budget: o.budget });
+  const kind = kindOf(o);
+  const { dir, session } = createSession(root, { goal: o.goal, url: o.url, data: o.data, budget: o.budget, kind });
   // A goal the person gives is remembered: next week's session starts from it without being told again.
-  if (session.goalSource === 'given') saveFacts(root, putFact(loadFacts(root), { key: 'council.goal', value: session.goal, source: 'human', confidence: 'high', by: 'human' }).facts);
+  if (session.goalSource === 'given') saveFacts(root, putFact(loadFacts(root), { key: `${kind}.goal`, value: session.goal, source: 'human', confidence: 'high', by: 'human' }).facts);
   const short = budgetWarning(session);
   // With nothing better, the documents would carry the folder's name as the business's.
   const brand = brandOf(root);
@@ -105,7 +110,7 @@ export function next(o) {
     const moved = advanceDocs(ctx, ctx.root, { force: Boolean(o.force) });
     if (moved.errors.length) return { ok: false, errors: moved.errors, ...view(ctx) };
     persist(ctx);
-    return { ok: true, from: moved.from, to: moved.to, documents: moved.documents, warnings: moved.warnings, ...view(ctx) };
+    return { ok: true, from: moved.from, to: moved.to, documents: moved.documents, ...(moved.site ? { site: moved.site } : {}), warnings: moved.warnings, ...view(ctx) };
   }
   const { errors, from, to, closed, ideas } = advance(ctx, { force: Boolean(o.force), ideas: loadIdeas(ctx.root) });
   if (errors.length) return { ok: false, errors, ...view(ctx) };
@@ -121,19 +126,98 @@ export function evidence(o, { stdin = readStdin } = {}) {
   if (o.collect) {
     const have = ctx.evidence;
     // Statements cite evidence by id, so the collection never runs twice.
-    if (have.collectedAt) return { ok: true, already: true, path: evidencePath(dir), entries: have.entries.length, missing: have.missing };
-    const collected = collectEvidence(root, session);
+    if (have.collectedAt) return { ok: true, already: true, path: evidencePath(dir), entries: have.entries.length, missing: have.missing, reused: have.reused ?? [] };
+    const refresh = parseRefresh(o.refresh);
+    const collected = collectEvidence(root, session, { refresh });
     saveEvidence(dir, collected);
-    return { ok: true, path: evidencePath(dir), entries: collected.entries.length, dataFiles: collected.data.length, site: collected.site, missing: collected.missing };
+    // What was reused needs no turn; what is asked to be done again is done again, pictures of pages included.
+    session.reused = collected.reused.map((r) => r.kind);
+    session.refresh = refresh;
+    saveSession(dir, session);
+    return { ok: true, path: evidencePath(dir), entries: collected.entries.length, dataFiles: collected.data.length, site: collected.site, missing: collected.missing, reused: collected.reused.map(({ kind, at, from, entries }) => ({ kind, at, from, entries })) };
   }
   const { data, error } = readJsonInput(stdin, 'the evidence');
   if (error) return error;
   const { evidence: updated, errors, warnings, added } = addEvidence(ctx.evidence, data.evidence, { by: o.role, root, session });
   if (errors.length) return { ok: false, errors, warnings };
   saveEvidence(dir, updated);
-  // The competitor analyst's look around, and the horizon scan, are their turns in the evidence phase.
-  if (session.phase === 'evidence' && ['competitors', 'horizon'].includes(o.role)) { takeTurn(session, o.role); saveSession(dir, session); }
+  // The competitor analyst's look around, and the horizon scan, are their turns in the evidence phase. What they found
+  // is kept in the knowledge bank, so the next session soon after (of this skill or the invention lab) reuses it.
+  if (session.phase === 'evidence' && ['competitors', 'horizon'].includes(o.role)) {
+    takeTurn(session, o.role);
+    saveSession(dir, session);
+    saveGroundwork(root, o.role, { session, entries: updated.entries.filter((e) => e.by === o.role && !e.reusedFrom) });
+  }
   return { ok: true, added, warnings };
+}
+
+// The invention lab's frame. The framer saves the frame (--role framer) and the provocateur the provocations (--role
+// provocateur); --show prints the framings for the person, and --pick saves the ones they want worked on.
+export function frame(o, { stdin = readStdin } = {}) {
+  const ctx = sessionCtx(o);
+  const { dir, session } = ctx;
+  if (session.kind !== 'lab') return { ok: false, errors: ['Only an invention lab session has a frame (run it as the lab).'], warnings: [] };
+  const current = loadFrame(dir) ?? {};
+  if (o.show) {
+    if (!current.frame) return { ok: false, errors: ['The frame has not been written yet.'], warnings: [] };
+    return { ok: true, ideal: current.frame.ideal, questions: current.frame.questions, contradictions: current.frame.contradictions.map(({ id, want, butThen }) => ({ id, text: `${want}, but then ${butThen}` })), picked: current.picked ?? null, provocations: (current.provocations ?? []).length };
+  }
+  if (o.pick !== undefined) {
+    if (!['frame', 'propose'].includes(session.phase) || (session.phase === 'propose' && session.dealt)) return { ok: false, errors: ['The framings are picked before the proposing starts.'], warnings: [] };
+    const ids = String(o.pick).split(',').map((s) => s.trim()).filter(Boolean);
+    const errors = pickErrors(current, ids);
+    if (errors.length) return { ok: false, errors, warnings: [] };
+    saveFrame(dir, { ...current, picked: ids });
+    return { ok: true, picked: ids };
+  }
+  if (session.phase !== 'frame') return { ok: false, errors: [`The frame is written in the frame phase; the session is in the ${session.phase} phase`], warnings: [] };
+  const { data, error } = readJsonInput(stdin, 'the frame');
+  if (error) return error;
+  if (o.role === 'framer') {
+    const errors = validateFrame(data.frame);
+    if (errors.length) { refused(ctx, 'framer', 'frame', errors); return { ok: false, errors, warnings: [] }; }
+    saveFrame(dir, { ...current, frame: cleanFrame(data.frame), savedAt: new Date().toISOString() });
+    takeTurn(session, 'framer');
+    saveSession(dir, session);
+    return { ok: true, questions: data.frame.questions.length, contradictions: data.frame.contradictions.length };
+  }
+  if (o.role === 'provocateur') {
+    if (session.step !== 'provoke') return { ok: false, errors: ['The provocations are written after the frame.'], warnings: [] };
+    const errors = validateProvocations(data.provocations);
+    if (errors.length) { refused(ctx, 'provocateur', 'frame', errors); return { ok: false, errors, warnings: [] }; }
+    saveFrame(dir, { ...current, provocations: cleanProvocations(data.provocations) });
+    takeTurn(session, 'provocateur');
+    saveSession(dir, session);
+    return { ok: true, provocations: data.provocations.length };
+  }
+  throw new Error('Usage: frame --role framer | --role provocateur (JSON on standard input), --show, or --pick H1,C2');
+}
+
+// The domain primer: how the trade works, with the sources it rests on. Saved in the knowledge bank, and its sources
+// as evidence any member can cite.
+export function primer(o, { stdin = readStdin } = {}) {
+  const ctx = sessionCtx(o);
+  const { root, dir, session } = ctx;
+  if (session.phase !== 'evidence') return { ok: false, errors: [`The primer is written in the evidence phase; the session is in the ${session.phase} phase`], warnings: [] };
+  const { data, error } = readJsonInput(stdin, 'the primer');
+  if (error) return error;
+  const previous = loadGroundwork(root, 'primer');
+  const refresh = Boolean(previous?.primer);
+  const errors = validatePrimer(data.primer, { refresh });
+  const items = Array.isArray(data.evidence) ? data.evidence : null;
+  if (!items) errors.push('$.evidence: the pages the primer rests on, each { "grade": "observed", "source": "https://…", "date", "text" }');
+  else if (items.length < (refresh ? 1 : 3)) errors.push(`$.evidence: at least ${refresh ? 'one page that shows what is new or still holds' : 'three pages'}: a primer that rests on nothing is a guess`);
+  if (errors.length) { refused(ctx, 'primer', 'primer', errors); return { ok: false, errors, warnings: [] }; }
+  const { evidence: updated, errors: evErrors, warnings, added } = addEvidence(ctx.evidence, items, { by: 'primer', root, session });
+  if (evErrors.length) { refused(ctx, 'primer', 'primer', evErrors); return { ok: false, errors: evErrors, warnings }; }
+  saveEvidence(dir, updated);
+  // A refresh keeps the sources of the primer before, with the new ones.
+  const sources = [...(refresh ? previous.entries ?? [] : []), ...updated.entries.filter((e) => e.by === 'primer' && !e.reusedFrom)];
+  const unique = sources.filter((e, i) => sources.findIndex((x) => x.source === e.source && x.text === e.text) === i);
+  saveGroundwork(root, 'primer', { session, entries: unique, primer: cleanPrimer(data.primer) });
+  takeTurn(session, 'primer');
+  saveSession(dir, session);
+  return { ok: true, refreshed: refresh, added, warnings };
 }
 
 export function say(o, { stdin = readStdin } = {}) {
@@ -199,10 +283,10 @@ export async function shots(o) {
 export function render(o) {
   const ctx = sessionCtx(o);
   if (!['write', 'review', 'done'].includes(ctx.session.phase)) return { ok: false, errors: [`The documents are made after the verdicts are final; the session is in the ${ctx.session.phase} phase`], warnings: [] };
-  const { errors, warnings, documents, rendered } = renderDocs(ctx, ctx.root, { only: o.doc ?? null, html: Boolean(o.html) });
+  const { errors, warnings, documents, site, rendered } = renderDocs(ctx, ctx.root, { only: o.doc ?? null, html: Boolean(o.html) });
   if (errors.length) return { ok: false, errors, warnings };
   saveSession(ctx.dir, ctx.session);
-  return { ok: true, documents, rendered, warnings };
+  return { ok: true, documents, ...(site ? { site } : {}), rendered, warnings };
 }
 
 export function close(o) {
@@ -269,15 +353,21 @@ export function verdict(o, { stdin = readStdin } = {}) {
 export function look(o) {
   if (!o.url) throw new Error('Usage: look --url https://example.com/page [--role <your role>]');
   checkUrl(o.url);
-  const { dir } = sessionCtx(o);
+  const { root, dir, session } = sessionCtx(o);
   const browser = findBrowser();
   if (!browser) return { ok: false, errors: ['No Chrome, Edge or Chromium was found, so pages cannot be looked at here. Read them instead, and say in your evidence that you did not see them.'], warnings: [] };
   const u = new URL(o.url);
   const slug = `${u.hostname}${u.pathname}`.replace(/[^a-z0-9]+/gi, '-').replace(/^-|-$/g, '').toLowerCase().slice(0, 80) || 'page';
   const shots = [];
   const failed = [];
+  // A picture of the same page taken in the last week, by any session, is used again unless the session asked for
+  // fresh ones (--refresh looks at the collection).
+  const again = (session.refresh ?? []).some((k) => k === 'looks' || k === 'all');
   for (const [view, size] of Object.entries(VIEWS)) {
-    try { shots.push({ view, size: size.join('x'), file: screenshot(browser, o.url, path.join(dir, 'looks', `${slug}-${view}.png`), size) }); } catch (e) { failed.push(`${view}: ${e.message}`); }
+    const file = path.join(dir, 'looks', `${slug}-${view}.png`);
+    const kept = again ? null : cachedLook(root, file);
+    if (kept) { shots.push({ view, size: size.join('x'), file, taken: kept.taken, reused: true }); continue; }
+    try { shots.push({ view, size: size.join('x'), file: screenshot(browser, o.url, file, size) }); cacheLook(root, file); } catch (e) { failed.push(`${view}: ${e.message}`); }
   }
   if (!shots.length) return { ok: false, errors: failed, warnings: [] };
   return { ok: true, url: o.url, shots, failed, note: 'Open each file with your file reader to see it. "desktop" is the first screen on a computer; "narrow" is the first screen at 500 pixels wide, the narrowest this browser lays out, which most sites show as their phone layout (a phone is narrower still, so do not judge text that is cut off at the edge); "desktop-long" goes further down the page. To cite what you saw, add it to the evidence with this address as its source.' };
@@ -315,4 +405,4 @@ export function digest(o) {
   return bankDigest(rootOf(o));
 }
 
-export const COMMANDS = { init, status, next, cast, evidence, context, say, look, verdict, save, shots, render, close, ideas, fact, digest };
+export const COMMANDS = { init, status, next, cast, evidence, primer, frame, context, say, look, verdict, save, shots, render, close, ideas, fact, digest };

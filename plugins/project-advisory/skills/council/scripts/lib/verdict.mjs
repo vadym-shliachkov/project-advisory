@@ -1,6 +1,7 @@
 import path from 'node:path';
 import { readJson, writeJson } from './io.mjs';
-import { takeTurn } from './session.mjs';
+import { takeTurn, isLab } from './session.mjs';
+import { UPSIDES, LAB_SCALES } from './lab.mjs';
 import { thread, inThread, testErrors, whereErrors, cleanWhere, SCALES } from './record.mjs';
 import { applyIdeas } from './ideas.mjs';
 
@@ -91,6 +92,16 @@ function rulingErrors(r, at, ctx) {
   }
   if (r.verdict === 'killed') errors.push(...textError(r.causeOfDeath, `${at}.causeOfDeath`, 10, CAUSE_MAX).map((e) => `${e}: the cause of death, in one line`));
   if (r.verdict === 'undecided') errors.push(...textError(r.wouldDecide, `${at}.wouldDecide`, 10, 400).map((e) => `${e}: the number, the access or the answer that would decide it`));
+  if (isLab(ctx.session) && r.verdict !== 'killed') {
+    if (!UPSIDES.includes(r.upside)) errors.push(`${at}.upside: what the bet is worth if it works: ${UPSIDES.join(', ')}`);
+    errors.push(...textError(r.riskiest, `${at}.riskiest`, 10, 300).map((e) => `${e}: the assumption most likely to be false, after the debate, in words for the reader`), ...readerErrors(r.riskiest, `${at}.riskiest`));
+    if (r.verdict === 'narrowed' && r.narrowed?.scale !== undefined && !LAB_SCALES.includes(r.narrowed.scale)) errors.push(`${at}.narrowed.scale: a bet stays new or a direction; the lab does not narrow a bet into an edit of the site`);
+  }
+  // A bet that fell, or was cut down, for reaching further than the council can test is worth the invention lab's time.
+  if (r.labCandidate !== undefined) {
+    if (typeof r.labCandidate !== 'boolean') errors.push(`${at}.labCandidate: true or false`);
+    else if (r.labCandidate && r.verdict === 'survived') errors.push(`${at}.labCandidate: only an idea killed, left undecided or narrowed goes to the invention lab`);
+  }
   errors.push(...readerErrorsIn({
     ...(lived(r) ? { vsDoNothing: r.vsDoNothing } : {}),
     ...(r.verdict === 'narrowed' && r.narrowed && typeof r.narrowed === 'object' ? { narrowed: r.narrowed } : {}),
@@ -115,6 +126,8 @@ const clean = (r) => ({
   } } : {}),
   ...(r.verdict === 'killed' || (r.verdict === 'narrowed' && r.causeOfDeath) ? { causeOfDeath: one(r.causeOfDeath) } : {}),
   ...(r.verdict === 'undecided' ? { wouldDecide: one(r.wouldDecide) } : {}),
+  ...(r.labCandidate && r.verdict !== 'survived' ? { labCandidate: true } : {}),
+  ...(r.upside ? { upside: r.upside } : {}), ...(r.riskiest ? { riskiest: one(r.riskiest) } : {}),
 });
 
 function addToRecord(record, entry) {
@@ -244,6 +257,8 @@ export function finalise(ctx, { ideas, date } = {}) {
         title: r.narrowed.title, goal: parent.goal, proposedBy: parent.proposedBy, parent: parent.id, effort: parent.effort,
         ...(r.narrowed.scale ?? parent.scale ? { scale: r.narrowed.scale ?? parent.scale } : {}),
         ...(parent.novelty ? { novelty: parent.novelty } : {}),
+        ...(parent.priorArt ? { priorArt: parent.priorArt } : {}),
+        ...(parent.origin ? { origin: parent.origin } : {}),
         ...((r.narrowed.where ?? parent.where)?.length ? { where: r.narrowed.where ?? parent.where } : {}),
         test: r.narrowed.test ?? lastTest(record, r.thread) ?? parent.test,
         hypothesis: { ...parent.hypothesis, change: r.narrowed.change, effect: r.narrowed.effect, killCondition: r.narrowed.killCondition ?? parent.hypothesis.killCondition },
@@ -258,14 +273,15 @@ export function finalise(ctx, { ideas, date } = {}) {
     r.narrowed = { ...r.narrowed, ...(child.test ? { test: child.test } : {}), killCondition: child.hypothesis.killCondition };
   });
 
-  const verdict = (r) => ({ session: session.id, ...(r.strength ? { strength: r.strength, vsDoNothing: r.vsDoNothing } : {}) });
+  const verdict = (r) => ({ session: session.id, ...(r.strength ? { strength: r.strength, vsDoNothing: r.vsDoNothing } : {}), ...(r.upside ? { upside: r.upside } : {}), ...(r.riskiest ? { riskiest: r.riskiest } : {}) });
   const moves = verdicts.rulings.flatMap((r) => {
     const id = ideaOf(r.thread);
     if (r.verdict === 'survived') return [{ id, status: 'survived', verdict: verdict(r) }];
-    if (r.verdict === 'killed') return [{ id, status: 'killed', verdict: { session: session.id, causeOfDeath: r.causeOfDeath } }];
-    if (r.verdict === 'undecided') return [{ id, status: 'undecided', verdict: { session: session.id, wouldDecide: r.wouldDecide } }];
+    const lab = r.labCandidate ? { labCandidate: true } : {};
+    if (r.verdict === 'killed') return [{ id, status: 'killed', verdict: { session: session.id, causeOfDeath: r.causeOfDeath }, ...lab }];
+    if (r.verdict === 'undecided') return [{ id, status: 'undecided', verdict: { session: session.id, wouldDecide: r.wouldDecide, ...(r.upside ? { upside: r.upside } : {}), ...(r.riskiest ? { riskiest: r.riskiest } : {}) }, ...lab }];
     return [
-      { id, status: 'killed', verdict: { session: session.id, causeOfDeath: r.causeOfDeath ?? `Too broad as proposed; it survived in a smaller form as ${r.childId}` } },
+      { id, status: 'killed', verdict: { session: session.id, causeOfDeath: r.causeOfDeath ?? `Too broad as proposed; it survived in a smaller form as ${r.childId}` }, ...lab },
       { id: r.childId, status: 'survived', verdict: verdict(r) },
     ];
   });

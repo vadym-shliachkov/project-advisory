@@ -10,8 +10,14 @@ The bank is a folder of JSON files in the project. Plugins are installed separat
 <project>/.project-health/kb/
 ├─ facts.json        single facts, by key
 ├─ knowledge.json    the people and the ground rules agreed with them
-└─ ideas.json        the idea ledger
+├─ ideas.json        the idea ledger
+└─ groundwork/       research a session did before proposing, reused while fresh
+   ├─ primer.json       how the trade works, and its playbook
+   ├─ competitors.json  what the competitor analyst saw
+   └─ horizon.json      what is changing around the business
 ```
+
+Pictures of pages are kept outside the bank, in `.project-health/cache/looks/`, which is ignored by git.
 
 `.project-health/` is the folder the plugins of this marketplace share in a project. `kb/` is committed with the project; the other folders in `.project-health/` are working files and are ignored by git.
 
@@ -109,3 +115,15 @@ The idea ledger: every idea the council proposed, and what became of it. The ful
 | `inconclusive` | Tried, and nobody could tell. |
 
 The council skill writes this file. Other skills read it.
+
+## groundwork/
+
+Written by the council and the invention lab (both run on the council's scripts); read by both. Each file is the latest research of its kind, replaced whole when it is done again:
+
+```json
+{ "kind": "competitors", "at": "2026-11-17", "url": "https://example.com",
+  "by": { "skill": "council", "session": "2026-11-17" },
+  "entries": [ { "grade": "observed", "source": "https://rival.test/work", "date": "2026-11-17", "text": "…", "by": "competitors" } ] }
+```
+
+`primer.json` adds `primer`: the trade, its buyers and how they buy, its economics, what is commodity and what is scarce, dates set from outside, words of the trade and its playbook. A record is reused by a session for the same site while it is fresh: the primer for 7 days (then refreshed from the one before), the horizon scan for 14, the competitor scan for 30. The entries carry no ids: each session numbers its evidence anew.

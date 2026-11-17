@@ -1,28 +1,38 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { readJson, writeJson } from './io.mjs';
-import { SKILL_DIR } from './paths.mjs';
+import { SKILL_DIR, scriptOf } from './paths.mjs';
 import { buildModel, loadDoc, saveDoc, docPath, validateSuggestions, mergeDiscussion, discussionGaps, validateReview, validateLayout } from './documents.mjs';
 import { buildSuggestionsHtml, buildDiscussionHtml } from './html.mjs';
+import { buildBriefHtml } from './brief.mjs';
+import { buildBetsHtml } from './labdoc.mjs';
+import { loadFrame, loadCards } from './lab.mjs';
+import { isLab } from './session.mjs';
+import { buildSite } from './site.mjs';
 import { findBrowser, printPdf, pdfPageCount, lookSlug } from './browser.mjs';
 import { shootParts } from './shots.mjs';
 
-// After the verdicts are final: the two documents are written, printed, read by reviewers who did not write them,
+// After the verdicts are final: the documents are written, printed, read by reviewers who did not write them,
 // corrected once, and the session is closed. Like the debate, this part has turns, and it cannot loop: the minutes
 // are revised once, and a document is looked at for layout at most twice.
 
-const SCRIPT = path.join(SKILL_DIR, 'scripts', 'council.mjs');
-export const DOCS = ['suggestions', 'discussion'];
-export const DOC_STAFF = ['narrator', 'writer', 'fidelity', 'critic', 'layout-suggestions', 'layout-discussion'];
+// The decision brief is built from what the writer of the suggestions wrote: it has no writer of its own.
+export const DOCS = ['brief', 'suggestions', 'discussion'];
+// The invention lab writes no minutes: its documents are the brief and the bets.
+export const LAB_DOCS = ['brief', 'bets'];
+export const docsFor = (session) => (isLab(session) ? LAB_DOCS : DOCS);
+export const DOC_STAFF = ['narrator', 'writer', 'fidelity', 'critic', 'layout-brief', 'layout-suggestions', 'layout-discussion', 'layout-bets'];
 const MAX_LAYOUT_ROUNDS = 2;
 const STAFF_NAMES = {
   narrator: 'the librarian, who writes the minutes', writer: 'the writer of the suggestions', fidelity: 'the fidelity reviewer', critic: 'the literary critic',
-  'layout-suggestions': 'the layout reviewer of the suggestions', 'layout-discussion': 'the layout reviewer of the discussion',
+  'layout-bets': 'the layout reviewer of the bets', 'layout-brief': 'the layout reviewer of the decision brief', 'layout-suggestions': 'the layout reviewer of the suggestions', 'layout-discussion': 'the layout reviewer of the discussion',
 };
 
 const file = (dir, name) => path.join(dir, name);
 const has = (dir, name) => fs.existsSync(file(dir, name));
 const docsOf = (session) => (session.docs ??= { rendered: 0, revised: false, stale: false });
+
+const contentDefects = (s) => ['brief', 'suggestions', 'bets'].some((d) => s.layouts[d]?.defects.some((x) => x.cause === 'content'));
 
 export function docState(ctx, root) {
   const { dir, session } = ctx;
@@ -30,8 +40,8 @@ export function docState(ctx, root) {
   const suggestions = loadDoc(dir, 'suggestions');
   const discussion = loadDoc(dir, 'discussion');
   const reviews = { fidelity: loadDoc(dir, 'review-fidelity'), critic: loadDoc(dir, 'review-critic') };
-  const layouts = Object.fromEntries(DOCS.map((d) => [d, loadDoc(dir, `layout-${d}`)]));
-  return { model, suggestions, discussion, gaps: discussionGaps(discussion, model), reviews, layouts, docs: docsOf(session), pdf: Object.fromEntries(DOCS.map((d) => [d, has(dir, `${d}.pdf`) ? file(dir, `${d}.pdf`) : null])) };
+  const layouts = Object.fromEntries(docsFor(session).map((d) => [d, loadDoc(dir, `layout-${d}`)]));
+  return { model, suggestions, discussion, gaps: isLab(session) ? [] : discussionGaps(discussion, model), reviews, layouts, docs: docsOf(session), pdf: Object.fromEntries(docsFor(session).map((d) => [d, has(dir, `${d}.pdf`) ? file(dir, `${d}.pdf`) : null])) };
 }
 
 // Whose turn it is while the documents are made.
@@ -40,16 +50,17 @@ export function docTurns(ctx, root) {
   if (!['write', 'review'].includes(session.phase)) return [];
   const s = docState(ctx, root);
   const turn = (role, done, extra = {}) => ({ role, name: STAFF_NAMES[role], model: 'strongest', threads: [], done, ...extra });
-  if (session.phase === 'write') return [turn('narrator', !s.gaps.length), turn('writer', Boolean(s.suggestions))];
-  const list = [turn('fidelity', Boolean(s.reviews.fidelity)), turn('critic', Boolean(s.reviews.critic))];
+  if (session.phase === 'write') return isLab(session) ? [turn('writer', Boolean(s.suggestions))] : [turn('narrator', !s.gaps.length), turn('writer', Boolean(s.suggestions))];
+  const list = isLab(session) ? [] : [turn('fidelity', Boolean(s.reviews.fidelity)), turn('critic', Boolean(s.reviews.critic))];
   // A layout is looked at after every printing, twice at most; without a PDF there is nothing to look at.
-  for (const d of DOCS) {
+  for (const d of docsFor(session)) {
     if (!s.pdf[d]) continue;
     const seen = s.layouts[d]?.render === s.docs.rendered;
     list.push(turn(`layout-${d}`, seen || s.docs.rendered > MAX_LAYOUT_ROUNDS, { model: 'standard' }));
   }
-  // A text of the suggestions that does not fit its place, or carries a broken character, goes back to its writer once.
-  if (s.layouts.suggestions?.defects.some((d) => d.cause === 'content')) list.push(turn('writer', Boolean(s.docs.suggestionsRevised)));
+  // A text of the suggestions or the brief that does not fit its place, or carries a broken character, goes back to its
+  // writer once.
+  if (contentDefects(s)) list.push(turn('writer', Boolean(s.docs.suggestionsRevised)));
   const issues = (s.reviews.fidelity?.issues.length ?? 0) + (s.reviews.critic?.issues.length ?? 0);
   if (s.reviews.fidelity && s.reviews.critic && issues) list.push(turn('narrator', s.docs.revised));
   return list;
@@ -61,7 +72,7 @@ export function docNextStep(ctx, root) {
   const waiting = docTurns(ctx, root).filter((t) => !t.done).map((t) => t.name);
   if (session.phase === 'write') {
     const shots = s.docs.shots ? '' : 'Run "shots" (it photographs the part of each page the ideas are about; give it up to ten minutes). ';
-    return waiting.length ? `${shots}Start ${waiting.join(' and ')}, at once.` : `${shots}Both documents are written. Run "next": it prints them and opens the review.`;
+    return waiting.length ? `${shots}Start ${waiting.join(' and ')}, at once.` : `${shots}The suggestions and the minutes are written. Run "next": it prints them with the decision brief, builds the session's pages and opens the review.`;
   }
   if (s.docs.stale) return 'A document changed after it was printed. Run "render", then start the layout reviewers again.';
   if (waiting.length) return `Start, at once: ${waiting.join('; ')}.`;
@@ -131,20 +142,25 @@ export function picturesOf(dir) {
   };
 }
 
-// Writes both documents as HTML and prints them. Without a browser the HTML is the document.
+// Writes the documents as HTML and prints them, and builds the session's site from them. Without a browser the HTML
+// is the document.
 export function renderDocs(ctx, root, { only = null, html = false, browser = findBrowser(), print = printPdf } = {}) {
   const { dir, session } = ctx;
   const s = docState(ctx, root);
   const errors = [];
   const warnings = [];
-  const wanted = only ? [only] : DOCS;
-  if (only && !DOCS.includes(only)) return { errors: [`Unknown --doc "${only}". Valid documents: ${DOCS.join(', ')}`], warnings };
-  if (wanted.includes('suggestions') && !s.suggestions) errors.push('The suggestions have not been written yet.');
-  if (wanted.includes('suggestions') && s.suggestions) errors.push(...validateSuggestions(s.suggestions, s.model, { strict: false }).map((e) => `suggestions: ${e}`));
+  const all = docsFor(session);
+  const wanted = only ? [only] : all;
+  if (only && !all.includes(only)) return { errors: [`Unknown --doc "${only}". Valid documents: ${all.join(', ')}`], warnings };
+  const fromWriter = wanted.some((d) => ['suggestions', 'brief', 'bets'].includes(d));
+  if (fromWriter && !s.suggestions) errors.push('The suggestions have not been written yet.');
+  if (fromWriter && s.suggestions) errors.push(...validateSuggestions(s.suggestions, s.model, { strict: false }).map((e) => `suggestions: ${e}`));
   if (wanted.includes('discussion') && s.gaps.length) errors.push(`The discussion is not complete: ${s.gaps.join('; ')}.`);
   if (errors.length) return { errors, warnings };
 
   const build = {
+    brief: () => buildBriefHtml({ model: s.model, suggestions: s.suggestions }),
+    bets: () => buildBetsHtml({ model: s.model, suggestions: s.suggestions, frame: loadFrame(dir), cards: loadCards(), parts: partsOf(dir) }),
     suggestions: () => buildSuggestionsHtml({ model: s.model, suggestions: s.suggestions, discussion: s.gaps.length ? null : s.discussion, picture: picturesOf(dir), parts: partsOf(dir) }),
     discussion: () => buildDiscussionHtml({ model: s.model, discussion: s.discussion, parts: partsOf(dir) }),
   };
@@ -171,10 +187,15 @@ export function renderDocs(ctx, root, { only = null, html = false, browser = fin
       warnings.push(`Printing ${d}.pdf failed (${String(e.message).trim()}); ${d}.html was written.`);
     }
   }
+  // The site is built from all of it, so only when the whole set is rendered.
+  let site = null;
+  if (!only && !s.gaps.length) {
+    try { site = buildSite({ ctx, root, frame: isLab(session) ? loadFrame(dir) : null, model: s.model, suggestions: s.suggestions, discussion: s.discussion, picture: picturesOf(dir), parts: partsOf(dir) }); } catch (e) { warnings.push(`The session's pages could not be built (${String(e.message).trim()}); the documents are not affected.`); }
+  }
   const docs = docsOf(session);
   docs.rendered += 1;
   docs.stale = false;
-  return { errors, warnings: [...new Set(warnings)], documents: out, rendered: docs.rendered };
+  return { errors, warnings: [...new Set(warnings)], documents: out, ...(site ? { site } : {}), rendered: docs.rendered };
 }
 
 // From writing to reviewing: both documents must be there, and they are printed on the way.
@@ -195,7 +216,7 @@ export function advanceDocs(ctx, root, { force = false, render = renderDocs } = 
   const printed = render(ctx, root);
   if (printed.errors.length) return { errors: printed.errors, from, to: from, closed: [] };
   session.phase = 'review';
-  return { errors: [], from, to: { phase: 'review', round: session.round, step: session.step }, closed: [], documents: printed.documents, warnings: printed.warnings };
+  return { errors: [], from, to: { phase: 'review', round: session.round, step: session.step }, closed: [], documents: printed.documents, site: printed.site ?? null, warnings: printed.warnings };
 }
 
 // ---- Saving what the writers and reviewers hand in ----
@@ -215,6 +236,7 @@ export function saveDocument(ctx, root, doc, data) {
     if (session.phase === 'review') docs.suggestionsRevised = true;
     return { errors, path: docPath(dir, 'suggestions'), survivors: data.survivors.length, questions: data.questions.length };
   }
+  if (doc === 'discussion' && isLab(session)) return { errors: ['The invention lab writes no minutes.'] };
   if (doc === 'discussion') {
     const { errors, discussion } = mergeDiscussion(s.discussion, data, s.model);
     if (errors.length) return { errors };
@@ -234,7 +256,7 @@ export function saveDocument(ctx, root, doc, data) {
     const by = (sev) => data.issues.filter((i) => i.severity === sev).length;
     return { errors, path: docPath(dir, doc), issues: { high: by('high'), medium: by('medium'), low: by('low') } };
   }
-  const layout = /^layout-(suggestions|discussion)$/.exec(doc ?? '')?.[1];
+  const layout = /^layout-(brief|suggestions|discussion|bets)$/.exec(doc ?? '')?.[1];
   if (layout) {
     if (!s.pdf[layout]) return { errors: [`${layout}.pdf has not been printed, so there is no layout to review`] };
     const pages = pdfPageCount(s.pdf[layout]);
@@ -246,26 +268,27 @@ export function saveDocument(ctx, root, doc, data) {
     const unseen = data.pagesSeen === 0 ? { reviewed: false, warning: `The layout of ${layout} was not reviewed: the reviewer could not view the pages. Tell the person, and do not report it as free of defects.` } : { reviewed: true };
     return { errors, path: docPath(dir, doc), pages, ...unseen, defects: { high: by('high'), medium: by('medium'), low: by('low') }, byCause: { template: data.defects.filter((d) => d.cause === 'template').length, content: data.defects.filter((d) => d.cause === 'content').length } };
   }
-  return { errors: [`Unknown or missing --doc "${doc ?? ''}". Valid: suggestions, discussion, review-fidelity, review-critic, layout-suggestions, layout-discussion`] };
+  return { errors: [`Unknown or missing --doc "${doc ?? ''}". Valid: suggestions, discussion, review-fidelity, review-critic, layout-brief, layout-suggestions, layout-discussion`] };
 }
 
-// The session is finished when both documents exist as printed and every reviewer has had a turn.
+// The session is finished when every document exists as printed and every reviewer has had a turn.
 export function closeSession(ctx, root, { force = false } = {}) {
   const { dir, session } = ctx;
   if (session.phase === 'done') return { errors: [], already: true };
   if (session.phase !== 'review') return { errors: [`A session is closed after its documents are reviewed; it is in the ${session.phase} phase. To stop it here instead, set it aside with --abandon.`] };
   const s = docState(ctx, root);
   const errors = [];
-  for (const d of DOCS) if (!has(dir, `${d}.html`)) errors.push(`${d} has not been rendered`);
+  for (const d of docsFor(session)) if (!has(dir, `${d}.html`)) errors.push(`${d} has not been rendered`);
   if (s.docs.stale) errors.push('A document changed after it was printed: run "render" first');
   const waiting = docTurns(ctx, root).filter((t) => !t.done);
   if (waiting.length && !force) errors.push(`${waiting.map((t) => t.name).join('; ')} ${waiting.length > 1 ? 'have' : 'has'} not had ${waiting.length > 1 ? 'their' : 'a'} turn. Start ${waiting.length > 1 ? 'them' : 'it'}, or pass --force to close without.`);
   if (errors.length) return { errors };
   session.phase = 'done';
   session.closedAt = new Date().toISOString();
-  const open = DOCS.flatMap((d) => (s.layouts[d]?.defects ?? []).filter((x) => x.severity === 'high').map((x) => `${d}, page ${x.page}: ${x.what}`));
-  const notReviewed = DOCS.filter((d) => s.pdf[d] && (!s.layouts[d] || s.layouts[d].pagesSeen === 0));
-  return { errors, documents: Object.fromEntries(DOCS.map((d) => [d, s.pdf[d] ?? file(dir, `${d}.html`)])), highLayoutDefects: open, layoutNotReviewed: notReviewed, skipped: waiting.map((t) => t.role) };
+  const open = docsFor(session).flatMap((d) => (s.layouts[d]?.defects ?? []).filter((x) => x.severity === 'high').map((x) => `${d}, page ${x.page}: ${x.what}`));
+  const notReviewed = docsFor(session).filter((d) => s.pdf[d] && (!s.layouts[d] || s.layouts[d].pagesSeen === 0));
+  const site = file(dir, path.join('site', 'index.html'));
+  return { errors, documents: Object.fromEntries(docsFor(session).map((d) => [d, s.pdf[d] ?? file(dir, `${d}.html`)])), site: fs.existsSync(site) ? site : null, highLayoutDefects: open, layoutNotReviewed: notReviewed, skipped: waiting.map((t) => t.role) };
 }
 
 // ---- What each writer and reviewer is given ----
@@ -277,6 +300,7 @@ const statementView = (s) => {
 const ideaView = (i) => ({
   thread: i.thread, id: i.id, title: i.title, originalTitle: i.originalTitle, proposedBy: i.proposerRole, verdict: i.verdict, strength: i.strength, effort: i.effort,
   scale: i.scale, novelty: i.novelty, ...(i.where.length ? { where: i.where } : {}), ...(i.uncovered ? { uncovered: i.uncovered } : {}),
+  ...(i.priorArt ? { priorArt: i.priorArt } : {}), ...(i.bet ? { bet: i.bet } : {}),
   hypothesis: i.hypothesis, ...(i.verdict === 'narrowed' ? { asFirstProposed: i.originalHypothesis } : {}), test: i.test, ruling: i.ruling,
   ...(i.closed ? { howTheDebateEnded: i.closed.reason } : {}), ...(i.alsoCovers.length ? { alsoCovers: i.alsoCovers } : {}),
   statements: i.statements.map(statementView), evidence: i.evidence,
@@ -285,7 +309,7 @@ const ideaView = (i) => ({
 export function docTurn(ctx, role, root) {
   const { dir, session } = ctx;
   const s = docState(ctx, root);
-  const cmd = (doc) => `node "${SCRIPT}" save --doc ${doc} --root "${root}" --session ${session.id}`;
+  const cmd = (doc) => `node "${scriptOf(session)}" save --doc ${doc} --root "${root}" --session ${session.id}`;
   const turn = docTurns(ctx, root).find((t) => t.role === role);
   if (!turn) throw new Error(`It is not ${role}'s turn in the ${session.phase} phase. See the status command for whose turn it is.`);
   const m = s.model;
@@ -311,17 +335,20 @@ export function docTurn(ctx, role, root) {
       goal: m.session.goal, counts: m.counts, lacked: m.missing, grades: m.grades,
       survivors: m.survivors.map(ideaView), setNotes: m.setNotes,
       questions: m.questions.map(({ n, idea, text, for: forWhom }) => ({ n, idea, for: forWhom, text })),
-      notSurvivors: { killed: m.killed.filter((i) => !m.bets.includes(i)).map((i) => ({ title: i.title, causeOfDeath: i.ruling.causeOfDeath })), undecided: m.undecided.filter((i) => !m.bets.includes(i)).map((i) => ({ title: i.title, wouldDecide: i.ruling.wouldDecide })) },
+      // Every killed idea, with its whole thread: one entry each under "killed" in what you write.
+      killed: m.killed.map(ideaView),
+      notSurvivors: { undecided: m.undecided.filter((i) => !m.bets.includes(i)).map((i) => ({ title: i.title, wouldDecide: i.ruling.wouldDecide })) },
       // The bold ideas that did not survive: one entry each under "bets" in what you write.
       bets: m.bets.map(ideaView),
       // Which places were photographed; a part not found is shown as the top of its page.
       pictures: (loadParts(dir)?.places ?? []).map(({ thread, url, part, found, file }) => ({ thread, url, part, photographed: Boolean(file), found })),
       // The pages a link may point to: the places of the ideas, the evidence, and any page of the site.
       site: m.session.url,
+      ...(isLab(session) ? { frame: loadFrame(dir) } : {}),
     };
     if (s.suggestions) extra.push(`- The suggestions as they stand, to revise: ${docPath(dir, 'suggestions')}`);
-    if (s.layouts.suggestions?.defects.some((d) => d.cause === 'content')) extra.push(`- The layout review, whose "content" defects you fix (a text too long for its place, a broken character): ${docPath(dir, 'layout-suggestions')}`);
-    return { prompts: ['writer.md'], input: { name: 'suggestions-model', data: input }, extra, cmd: cmd('suggestions'), shape: '{ "summary": "…", "plan": [ { "text": "…", "ideas": ["I21"] } ], "survivors": [ { "idea": "I21", … } ], "questions": [ { "refs": [41], "text": "…" } ] }', okLine: 'suggestions: ok, 8 survivors', badLine: 'suggestions: invalid — <first error>' };
+    for (const d of ['suggestions', 'brief']) if (s.layouts[d]?.defects.some((x) => x.cause === 'content')) extra.push(`- The layout review of the ${d === 'brief' ? 'decision brief (built from your text)' : 'suggestions'}, whose "content" defects you fix (a text too long for its place, a broken character): ${docPath(dir, `layout-${d}`)}`);
+    return { prompts: ['writer.md'], input: { name: 'suggestions-model', data: input }, extra, cmd: cmd('suggestions'), shape: '{ "summary": "…", "plan": [ { "text": "…", "ideas": ["I21"] } ], "survivors": [ { "idea": "I21", … } ], "killed": [ { "idea": "I5", … } ], "bets": [ … ], "questions": [ { "refs": [41], "text": "…" } ] }', okLine: 'suggestions: ok, 8 survivors', badLine: 'suggestions: invalid — <first error>' };
   }
   if (role === 'fidelity') {
     writeJson(file(dir, path.join('in', 'discussion-model.json')), { ideas: m.ideas.map(ideaView), cast: m.cast.map(({ role: r, name, title }) => ({ role: r, name, title })) });

@@ -22,7 +22,7 @@ const move = (ctx, opts) => ok(advance(ctx, opts));
 const errorOf = (r) => r.errors.join('\n');
 
 const hyp = (n) => ({
-  type: 'hypothesis', title: `Idea ${n}: a case study on the services page`, effort: 'small', scale: 'new', evidence: ['E1'],
+  type: 'hypothesis', priorArt: { exists: 'no', searched: 'Searched for case studies of this kind on rival sites' }, title: `Idea ${n}: a case study on the services page`, effort: 'small', scale: 'new', evidence: ['E1'],
   hypothesis: {
     change: `Publish case study number ${n} with the client's results`,
     effect: 'More enquiries from the services pages, about two a month',

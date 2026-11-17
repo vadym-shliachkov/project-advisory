@@ -9,8 +9,8 @@ Bring **one or two** more ideas, on ground that **none of the ideas on the table
 3. Each idea here is `new` or a `direction`: something the business does not do yet, or a remake of what it has. Its test is still a cheap first step, and it still names its kill condition.
 4. Say in `uncovered`, in one or two sentences, what this idea covers that no idea on the table does.
 
-Everything in "Your turn: propose" still holds (the evidence, the test, the kill condition, the ledger), except the count: one or two ideas, not two to four.
+Everything in "Your turn: propose" still holds (the evidence, the test, the kill condition, the search for prior art, the ledger), except the count: one or two ideas, not two to four.
 
 ```json
-{ "statements": [ { "type": "hypothesis", "title": "…", "hypothesis": { … }, "test": { … }, "effort": "large", "scale": "new", "uncovered": "No idea on the table reaches the buyers before they start looking: this one …", "evidence": ["E31"] } ] }
+{ "statements": [ { "type": "hypothesis", "title": "…", "hypothesis": { … }, "test": { … }, "effort": "large", "scale": "new", "uncovered": "No idea on the table reaches the buyers before they start looking: this one …", "priorArt": { "exists": "no", "searched": "…" }, "evidence": ["E31"] } ] }
 ```

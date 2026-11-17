@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { readJson, writeJson } from './io.mjs';
 import { loadFacts, today, latestHealthRun, latestRoadmap } from './bank.mjs';
+import { reusable } from './groundwork.mjs';
 
 // What the council may cite. Every entry has an id, a source, a date and a grade:
 //   measured: a number from data the person shared;
@@ -25,7 +26,7 @@ const SETTLED = { wrong: 'found to be wrong', 'already-fixed': 'already fixed', 
 const SET_ASIDE = { backlog: 'kept in the backlog', 'wont-fix': 'not to be fixed', 'accepted-risk': 'accepted as a risk' };
 
 export const evidencePath = (dir) => path.join(dir, 'evidence.json');
-export const loadEvidence = (dir) => readJson(evidencePath(dir), null) ?? { entries: [], data: [], missing: [], site: null };
+export const loadEvidence = (dir) => readJson(evidencePath(dir), null) ?? { entries: [], data: [], missing: [], site: null, reused: [] };
 export const saveEvidence = (dir, evidence) => writeJson(evidencePath(dir), evidence);
 
 const one = (s) => String(s ?? '').replace(/\s+/g, ' ').trim();
@@ -91,8 +92,9 @@ export function addEvidence(evidence, items, { by, root, session, date = today()
     if (text.length < 10) { errors.push(`${at}.text: say what was seen or measured, in at least 10 characters`); return; }
     if (text.length > TEXT_MAX) { errors.push(`${at}.text: at most ${TEXT_MAX} characters; one fact per entry`); return; }
     if (item.grade !== 'argued' && !one(item.source)) { errors.push(`${at}.source: ${item.grade} evidence needs its source`); return; }
-    // An opening from the horizon scan is a change in the world; without the page that reports it, it is a guess.
-    if (by === 'horizon' && !/^https?:\/\/\S+$/i.test(one(item.source))) { errors.push(`${at}.source: an opening needs the address of the page that reports it, and its "date" when the page gives one`); return; }
+    // An opening from the horizon scan is a change in the world, and a line of the primer a fact about the trade:
+    // without the page that reports it, either is a guess.
+    if (['horizon', 'primer'].includes(by) && !/^https?:\/\/\S+$/i.test(one(item.source))) { errors.push(`${at}.source: ${by === 'primer' ? 'a fact about the trade' : 'an opening'} needs the address of the page that reports it, and its "date" when the page gives one`); return; }
     const { grade, warning } = gradeFor(item, { root, session, facts });
     if (warning) warnings.push(warning);
     const source = one(item.source) || null;
@@ -109,8 +111,10 @@ const daysBetween = (a, b) => (Date.parse(b) - Date.parse(a)) / 86400000;
 
 // The first set of evidence, gathered without an agent: what a health check found (when the project-health skill
 // has run one), what the knowledge bank holds and what is in the shared data folder. It also says what the session
-// lacks. The live site is not fetched here: agents open its pages themselves and cite them by address.
-export function collectEvidence(root, session, { date = today() } = {}) {
+// lacks. The live site is not fetched here: agents open its pages themselves and cite them by address. The groundwork
+// an earlier session (of this skill or of the invention lab) left fresh in the knowledge bank is taken in as well,
+// unless `refresh` asks for it to be done again: its turns are then taken.
+export function collectEvidence(root, session, { date = today(), refresh = [] } = {}) {
   const entries = [];
   const missing = [];
   const add = (grade, source, text, by, at = date) => entries.push({ id: nextId(entries), grade, source, date: at, text: clip(one(text)), by });
@@ -153,5 +157,11 @@ export function collectEvidence(root, session, { date = today() } = {}) {
   else if (!data.length) missing.push(`The data folder ${session.data} is empty.`);
   if (!session.url) missing.push('No live site address is known, so the site itself could not be looked at.');
 
-  return { entries, data, missing, site, collectedAt: new Date().toISOString() };
+  const reused = [];
+  for (const { kind, record } of reusable(root, session, { refresh, date })) {
+    for (const e of record.entries ?? []) entries.push({ ...e, id: nextId(entries), reusedFrom: `${record.by?.skill ?? 'council'} ${record.by?.session ?? record.at}` });
+    reused.push({ kind, at: record.at, from: record.by ?? null, entries: (record.entries ?? []).length });
+  }
+
+  return { entries, data, missing, site, reused, collectedAt: new Date().toISOString() };
 }
