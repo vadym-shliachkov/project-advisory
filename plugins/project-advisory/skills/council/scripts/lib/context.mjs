@@ -7,7 +7,7 @@ import { digest, recordLine } from './digest.mjs';
 import { loadIdeas, dueForCheck, trackRecord, ideasPath } from './ideas.mjs';
 import { seat, proposers } from './session.mjs';
 import { evidencePath } from './evidence.mjs';
-import { inThread, threadsFor } from './record.mjs';
+import { inThread, threadsFor, passOf } from './record.mjs';
 import { strengthAllowed, survivors } from './verdict.mjs';
 import { docTurn, DOC_STAFF } from './flow.mjs';
 
@@ -20,7 +20,7 @@ const exists = (rel) => fs.existsSync(path.join(SKILL_DIR, 'agents', rel));
 const one = (s) => String(s ?? '').replace(/\s+/g, ' ').trim();
 
 // Roles that are not seats at the table: they do one job for the session and say nothing in the debate.
-export const STAFF = ['track-record', 'casting', ...DOC_STAFF];
+export const STAFF = ['track-record', 'casting', 'horizon', ...DOC_STAFF];
 
 function saveLines(cmd, save, shape, okLine, badLine) {
   if (!save) return ['Reply with the JSON object only, as described above. Do not write any files.'];
@@ -132,7 +132,8 @@ function turnOf(ctx, role, root) {
       if (role !== 'casting') not('before the session starts only the cast can be chosen, by the casting role');
       return { prompts: ['casting.md'], digest: true, input: null, cmd: cmd('cast'), shape: '{ "seats": [ { "role": "onboarding", "title": "Onboarding", "ground": "…" } ] }', okLine: 'casting: ok, 5 seats', badLine: 'casting: invalid — <first error>' };
     case 'evidence':
-      if (role !== 'competitors') not('in the evidence phase only the competitor analyst looks around');
+      if (role === 'horizon') return { prompts: ['horizon.md'], digest: true, input: null, cmd: cmd('evidence --role horizon'), shape: '{ "evidence": [ { "grade": "observed", "source": "https://…", "date": "2026-10-02", "text": "…" } ] }', okLine: 'horizon: ok, 14 openings', badLine: 'horizon: invalid — <first error>' };
+      if (role !== 'competitors') not('in the evidence phase only the competitor analyst and the horizon scan look around');
       return { prompts: ['scout.md'], input: null, cmd: cmd('evidence --role competitors'), shape: '{ "evidence": [ { "grade": "observed", "source": "https://…", "text": "…" } ] }', okLine: 'scout: ok, 9 observations', badLine: 'scout: invalid — <first error>' };
     case 'track-record': {
       if (role !== 'track-record') not('the track record is checked by the track-record role');
@@ -140,13 +141,20 @@ function turnOf(ctx, role, root) {
       if (!due.length) not('no idea has a test whose date has passed');
       return { prompts: ['track-record.md'], input: { name: 'track-record', data: { today: today(), ideas: due } }, cmd: `node "${SCRIPT}" ideas --root "${root}" --by council --session ${session.id}`, shape: '{ "ideas": [ { "id": "I3", "status": "worked", "result": { "found": "…", "source": "…" } } ] }', okLine: 'track record: ok, 2 results', badLine: 'track record: invalid — <first error>' };
     }
-    case 'propose':
+    case 'propose': {
       if (!proposers(session).includes(role)) not('this seat does not propose ideas');
-      return { prompts: role === 'client' ? ['_contract.md', 'proposer.md', 'client.md'] : ['_contract.md', 'proposer.md'], sheet: role !== 'client', input: null, digest: true, cmd: cmd(`say --role ${role}`), shape: '{ "statements": [ { "type": "hypothesis", "title": "…", "hypothesis": { … }, "test": { … }, "effort": "small", "evidence": ["E3"] } ] }', okLine: `${role}: ok, 3 hypotheses`, badLine: `${role}: invalid — <first error>` };
+      const base = role === 'client' ? ['_contract.md', 'proposer.md', 'client.md'] : ['_contract.md', 'proposer.md'];
+      if (passOf(session) === 2) {
+        // The themes on the table, without who proposed them: what to steer away from, not whom to answer.
+        const taken = record.threads.map((t) => { const h = record.statements.find((s) => s.thread === t.id && s.type === 'hypothesis'); return { title: h.title, change: h.hypothesis.change, scale: h.scale, yours: t.by === role }; });
+        return { prompts: [...base, 'proposer-second.md'], sheet: role !== 'client', input: { name: `propose2-${role}`, data: { taken } }, digest: true, cmd: cmd(`say --role ${role}`), shape: '{ "statements": [ { "type": "hypothesis", "title": "…", "hypothesis": { … }, "test": { … }, "effort": "large", "scale": "new", "uncovered": "…", "evidence": ["E31"] } ] }', okLine: `${role}: ok, 1 hypothesis`, badLine: `${role}: invalid — <first error>` };
+      }
+      return { prompts: base, sheet: role !== 'client', input: null, digest: true, cmd: cmd(`say --role ${role}`), shape: '{ "statements": [ { "type": "hypothesis", "title": "…", "hypothesis": { … }, "test": { … }, "effort": "small", "scale": "adjustment", "where": [ { "url": "https://…", "part": "…", "text": "…" } ], "evidence": ["E3"] } ] }', okLine: `${role}: ok, 3 hypotheses`, badLine: `${role}: invalid — <first error>` };
+    }
     case 'docket':
       if (role !== 'judge') not('the docket is the judge\'s');
       return {
-        prompts: ['docket.md'], digest: true, cmd: cmd('verdict --stage docket'), shape: '{ "admitted": [ { "thread": "T1", "merge": ["T4"] } ], "refused": [ { "thread": "T3", "reason": "…", "ref": "S3" } ] }', okLine: 'docket: ok, 14 admitted, 3 refused', badLine: 'docket: invalid — <first error>',
+        prompts: ['docket.md'], digest: true, cmd: cmd('verdict --stage docket'), shape: '{ "admitted": [ { "thread": "T1", "merge": ["T4"], "novelty": "familiar" } ], "refused": [ { "thread": "T3", "reason": "…", "ref": "S3" } ] }', okLine: 'docket: ok, 14 admitted, 3 refused', badLine: 'docket: invalid — <first error>',
         input: { name: 'docket', data: { ideas: record.threads.map((t) => ideaView(ctx, t)) } },
       };
     case 'examine': {

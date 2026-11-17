@@ -61,6 +61,7 @@ Groups in use:
 | `business.*`, `conversion.*`, `team.*`, `site.*`, `brand.*` | people, through the project-health skill | What the site is for, who it is for, the main action, who maintains it |
 | one group per health area (`hosting.*`, `seo.*`, …) | the project-health skill | What its analysis observed |
 | `council.goal` | a person, through the council skill | The goal the council works towards |
+| `owner.considered`, `owner.offLimits` | a person, through the council skill | What the person already plans or has thought of, and what is off limits: the council looks past it |
 | `market.*` | the council skill | Competitors and what they do; what was observed about the audience |
 | `metric.*` | the council skill, or a person | Numbers with a history: enquiries, visits, positions |
 

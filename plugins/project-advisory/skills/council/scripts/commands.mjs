@@ -7,7 +7,7 @@ import { digest as bankDigest } from './lib/digest.mjs';
 import { createSession, resolveSession, loadSession, saveSession, budgetOf, budgetWarning, spendRun, recast, takeTurn, DEFAULT_GOAL } from './lib/session.mjs';
 import { buildContext, taskLine } from './lib/context.mjs';
 import { dueForCheck } from './lib/ideas.mjs';
-import { docTurns, docNextStep, advanceDocs, renderDocs, saveDocument, closeSession } from './lib/flow.mjs';
+import { docTurns, docNextStep, advanceDocs, renderDocs, saveDocument, closeSession, takePictures } from './lib/flow.mjs';
 import { brandOf } from './lib/documents.mjs';
 import { loadEvidence, saveEvidence, collectEvidence, addEvidence, evidencePath } from './lib/evidence.mjs';
 import { loadRecord, saveRecord, say as saySaved, saveDocket, advance, turns, nextStep, openThreads } from './lib/record.mjs';
@@ -58,6 +58,7 @@ function view({ root, dir, session, record, evidence, verdicts }) {
     },
     verdicts: verdicts.rulings.length ? { ...Object.fromEntries(VERDICTS.map((v) => [v, verdicts.rulings.filter((r) => r.verdict === v).length])), final: verdicts.final } : null,
     openQuestions: record.questions.length,
+    ...(record.docket ? { fresh: count((t) => t.status === 'admitted' && t.novelty === 'fresh') } : {}),
     ...(due.length ? { dueForCheck: due } : {}),
     // Each turn carries the one line that is the agent's whole task.
     turns: list.map((t) => ({ ...t, task: taskLine(root, session, t.role) })),
@@ -130,8 +131,8 @@ export function evidence(o, { stdin = readStdin } = {}) {
   const { evidence: updated, errors, warnings, added } = addEvidence(ctx.evidence, data.evidence, { by: o.role, root, session });
   if (errors.length) return { ok: false, errors, warnings };
   saveEvidence(dir, updated);
-  // The competitor analyst's look around is its turn in the evidence phase.
-  if (session.phase === 'evidence' && o.role === 'competitors') { takeTurn(session, o.role); saveSession(dir, session); }
+  // The competitor analyst's look around, and the horizon scan, are their turns in the evidence phase.
+  if (session.phase === 'evidence' && ['competitors', 'horizon'].includes(o.role)) { takeTurn(session, o.role); saveSession(dir, session); }
   return { ok: true, added, warnings };
 }
 
@@ -183,6 +184,15 @@ export function save(o, { stdin = readStdin } = {}) {
   }
   saveSession(ctx.dir, ctx.session);
   return { ok: true, doc: o.doc, ...rest };
+}
+
+// Photographs the part of each page the ideas apply to, once the verdicts are final, for the documents.
+export async function shots(o) {
+  const ctx = sessionCtx(o);
+  const { errors, ...rest } = await takePictures(ctx, ctx.root);
+  if (errors.length) return { ok: false, errors, warnings: [] };
+  saveSession(ctx.dir, ctx.session);
+  return { ok: true, ...rest };
 }
 
 // Writes the documents as HTML and prints them to PDF. --doc for one of them, --html to skip the printing.
@@ -305,4 +315,4 @@ export function digest(o) {
   return bankDigest(rootOf(o));
 }
 
-export const COMMANDS = { init, status, next, cast, evidence, context, say, look, verdict, save, render, close, ideas, fact, digest };
+export const COMMANDS = { init, status, next, cast, evidence, context, say, look, verdict, save, shots, render, close, ideas, fact, digest };

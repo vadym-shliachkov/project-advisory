@@ -270,3 +270,27 @@ table.present td:last-child { color: var(--muted); font-size: var(--t-sm); }
 table.evidence-table { font-size: var(--t-sm); }
 table.evidence-table td.ev-id { width: 12mm; }
 table.evidence-table td.ev-src { width: 58mm; }
+
+/* ---- Where an idea applies ---- */
+/* The part of the page an idea is about, outlined, with the page as a link: the reader sees the place instead of
+   remembering it, and can open it. */
+.where { margin: var(--sp-3) 0 var(--sp-4); max-width: 170mm; }
+.where h5 { margin: 0 0 var(--sp-1); }
+.part { margin: 0 0 var(--sp-3); break-inside: avoid; }
+.part img { display: block; max-width: 100%; max-height: 105mm; width: auto; height: auto; border: 1px solid var(--line); border-radius: 3pt; }
+.part figcaption, .part-link { margin: 3pt 0 0; font-size: var(--t-xs); color: var(--muted); overflow-wrap: anywhere; }
+.part-link { margin-bottom: var(--sp-2); }
+.not-found { color: var(--warn); }
+.chapter .where { margin: var(--sp-2) 0 var(--sp-4); }
+.chapter .part img { max-height: 80mm; }
+
+/* ---- New directions first, then improvements ---- */
+h2.group { break-before: page; margin-bottom: var(--sp-1); }
+.group-lead { margin-bottom: var(--sp-5); }
+.group-lead + .idea { break-before: avoid; }
+.tag-fresh { background: var(--good-soft); color: var(--good); }
+
+/* ---- Bold ideas the council could not prove ---- */
+.bet { margin: 0 0 var(--sp-5); padding-top: var(--sp-3); border-top: 1px solid var(--line); max-width: 170mm; break-inside: avoid; }
+.bet-head { margin: 0 0 var(--sp-2); }
+.bet > p { max-width: var(--prose); }

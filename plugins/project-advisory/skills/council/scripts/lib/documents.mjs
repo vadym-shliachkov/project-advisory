@@ -17,6 +17,7 @@ const EFFORT_ORDER = ['small', 'medium', 'large'];
 // The survivors are listed from the furthest-reaching: a bet on direction is a decision for the owner, a change to a
 // page is work for whoever keeps the site.
 const SCALE_ORDER = ['new', 'direction', 'addition', 'adjustment', null];
+export const BOLD = ['new', 'direction'];
 const lived = (r) => r.verdict === 'survived' || r.verdict === 'narrowed';
 
 export const docPath = (dir, name) => path.join(dir, `${name}.json`);
@@ -66,6 +67,7 @@ export function buildModel(ctx, root) {
       // condition or a test of its own, those are its, and the first ones are history.
       hypothesis: narrowed ? { ...h.hypothesis, change: narrowed.change, effect: narrowed.effect, killCondition: narrowed.killCondition ?? h.hypothesis.killCondition } : h.hypothesis,
       originalHypothesis: h.hypothesis, effort: h.effort, scale: narrowed?.scale ?? h.scale ?? null,
+      where: narrowed?.where ?? h.where ?? [], novelty: t.novelty ?? null, pass: t.pass ?? 1, uncovered: h.uncovered ?? null,
       test: narrowed ? narrowed.test ?? said.filter((s) => s.type === 'reply' && s.by === t.by && s.narrowed?.test).at(-1)?.narrowed.test ?? h.test : h.test,
       ruling, verdict: ruling?.verdict ?? null, strength: ruling?.strength ?? null,
       statements: said, closed: t.closed, alsoCovers: (t.mergedFrom ?? []).map(titleOf),
@@ -77,13 +79,17 @@ export function buildModel(ctx, root) {
   const order = (a, b) => SCALE_ORDER.indexOf(a.scale) - SCALE_ORDER.indexOf(b.scale) || STRENGTH_ORDER.indexOf(a.strength) - STRENGTH_ORDER.indexOf(b.strength) || EFFORT_ORDER.indexOf(a.effort) - EFFORT_ORDER.indexOf(b.effort) || Number(a.thread.slice(1)) - Number(b.thread.slice(1));
   const survivors = ideas.filter((i) => i.ruling && lived(i.ruling)).sort(order);
   const count = (v) => ideas.filter((i) => i.verdict === v).length;
+  const killed = ideas.filter((i) => i.verdict === 'killed');
+  const undecided = ideas.filter((i) => i.verdict === 'undecided');
   return {
     session: { id: session.id, goal: session.goal, url: session.url, budget: session.budget, runs: session.runs },
     brand: brandOf(root),
     cast: session.cast,
     ideas, survivors,
-    killed: ideas.filter((i) => i.verdict === 'killed'),
-    undecided: ideas.filter((i) => i.verdict === 'undecided'),
+    killed, undecided,
+    // A bold idea the council could not prove is still worth the owner's eye: what it would take is the conversation.
+    bets: [...undecided, ...killed].filter((i) => BOLD.includes(i.scale)),
+    fresh: ideas.some((i) => i.novelty) ? ideas.filter((i) => i.novelty === 'fresh').length : null,
     refused: record.threads.filter((t) => t.status === 'refused').map((t) => ({ thread: t.id, title: t.title, reason: t.refused.reason, ref: t.refused.ref ?? null })),
     merged: record.threads.filter((t) => t.status === 'merged').map((t) => ({ thread: t.id, title: t.title, into: titleOf(t.mergedInto) })),
     setNotes: (verdicts.set?.notes ?? []).map((n) => ({ ...n, ideas: n.threads.map((id) => ideas.find((i) => i.thread === id)?.title ?? id) })),
@@ -132,6 +138,27 @@ const ESTIMATE_RE = /\b\d+(?:[.,]\d+)?\s*(?:hours?|hrs?|man[- ]?days?|person[- ]
 // What an idea's thread holds, for checking numbers: everything said, the evidence it cites, and the ruling.
 const sourcesOf = (idea) => [idea.statements, idea.evidence, idea.ruling, idea.hypothesis, idea.test];
 
+// ---- Links ----
+
+// A writer names a page as a link, [the pricing page](https://…/pricing/), so the reader can open it instead of
+// remembering it. Only pages the council looked at, or pages of the site itself, may be linked: an address nobody
+// opened may not exist.
+export const LINK_RE = /\[([^\]\n]{1,160})\]\((https?:\/\/[^\s)]+)\)/g;
+export const sameUrl = (u) => { try { const x = new URL(u); return `${x.hostname.replace(/^www\./, '').toLowerCase()}${x.pathname.replace(/\/+$/, '')}${x.search}`; } catch { return String(u); } };
+const hostOf = (u) => { try { return new URL(u).hostname.replace(/^www\./, '').toLowerCase(); } catch { return null; } };
+// The words of a text without the addresses of its links: what the reader reads, and what lengths and numbers are about.
+export const unlinked = (value) => (typeof value === 'string' ? value.replace(LINK_RE, '$1')
+  : Array.isArray(value) ? value.map(unlinked)
+    : value && typeof value === 'object' ? Object.fromEntries(Object.entries(value).map(([k, v]) => [k, unlinked(v)])) : value);
+const linksIn = (value) => [...JSON.stringify(value ?? '').matchAll(LINK_RE)].map((m) => m[2]);
+
+function linkErrors(value, at, model) {
+  const site = hostOf(model.session.url);
+  const known = new Set([...model.ideas.flatMap((i) => [...i.where.map((w) => w.url), ...i.evidence.map((e) => e.source)])].filter((s) => /^https?:/i.test(s ?? '')).map(sameUrl));
+  return linksIn(value).filter((u) => !(site && hostOf(u) === site) && !known.has(sameUrl(u)))
+    .map((u) => `${at}: the link to ${u} is to a page nobody in the session looked at. Link pages of the site, the places the ideas name, or sources in the evidence`);
+}
+
 // ---- The suggestions ----
 
 // The decision box of each idea holds `expected`, `killCondition` and `firstStep`: they are short, so the box can be
@@ -148,18 +175,23 @@ export function validateSuggestions(doc, model, { strict = true } = {}) {
   if (!doc || typeof doc !== 'object' || Array.isArray(doc)) return ['The result must be a JSON object'];
   if (!model.final) return ['The verdicts are not final yet; the suggestions are written after the session leaves the set'];
   const TEXTS = strict ? SURVIVOR_TEXTS : OLD_TEXTS;
-  errors.push(...textErrors(doc.summary, '$.summary', 60, strict ? SUMMARY_MAX : 700));
+  errors.push(...textErrors(unlinked(doc.summary), '$.summary', 60, strict ? SUMMARY_MAX : 700), ...linkErrors(doc.summary, '$.summary', model));
   const list = Array.isArray(doc.survivors) ? doc.survivors : null;
   if (!list) return [...errors, '$.survivors: an array is required (empty when nothing survived)'];
   const seen = new Set();
   const all = numbersOf([model.ideas.map(sourcesOf), model.setNotes, model.counts]);
 
-  list.forEach((s, i) => {
+  list.forEach((raw, i) => {
     const at = `$.survivors[${i}]`;
-    const idea = model.survivors.find((x) => x.id === s?.idea);
-    if (!idea) { errors.push(`${at}.idea: "${s?.idea ?? ''}" is not a survivor of this session; the survivors are ${model.survivors.map((x) => x.id).join(', ') || 'none'}`); return; }
+    const idea = model.survivors.find((x) => x.id === raw?.idea);
+    if (!idea) { errors.push(`${at}.idea: "${raw?.idea ?? ''}" is not a survivor of this session; the survivors are ${model.survivors.map((x) => x.id).join(', ') || 'none'}`); return; }
     if (seen.has(idea.id)) { errors.push(`${at}.idea: ${idea.id} appears twice`); return; }
     seen.add(idea.id);
+    errors.push(...linkErrors(raw, at, model));
+    // The page an idea changes is named as a link at least once, so the reader can open it.
+    const linked = new Set(linksIn(raw).map(sameUrl));
+    if (strict) for (const w of idea.where) if (!linked.has(sameUrl(w.url))) errors.push(`${at}: link the page this idea changes where you first name it, as [${w.part.length > 40 ? 'the page' : w.part}](${w.url}): the reader does not know the site by heart`);
+    const s = unlinked(raw);
     for (const [field, [min, max]] of Object.entries(TEXTS)) errors.push(...textErrors(s[field], `${at}.${field}`, min, max));
     if (!Array.isArray(s.survived) || s.survived.length < 1 || s.survived.length > 4) errors.push(`${at}.survived: one to four of the strongest attacks, each with how it was answered`);
     else s.survived.forEach((x, j) => errors.push(...textErrors(x?.attack, `${at}.survived[${j}].attack`, 15, 320), ...textErrors(x?.answer, `${at}.survived[${j}].answer`, 15, 320)));
@@ -184,7 +216,29 @@ export function validateSuggestions(doc, model, { strict = true } = {}) {
   });
   for (const idea of model.survivors) if (!seen.has(idea.id)) errors.push(`${idea.id} "${idea.title}" survived and is missing: every survivor is reported`);
 
-  const stray = strayNumbers(one(doc.summary), all);
+  // The bold ideas that did not survive: what each would do, and what would make it worth trying.
+  const bets = new Map(model.bets.map((b) => [b.id, b]));
+  if (doc.bets === undefined) { if (strict && bets.size) errors.push(`$.bets: one entry for each bold idea that did not survive (${[...bets.keys()].join(', ')}), each { "idea", "sentence", "worthIt" }`); }
+  else if (!Array.isArray(doc.bets)) errors.push('$.bets: an array is required (empty when no bold idea fell)');
+  else {
+    const covered = new Set();
+    doc.bets.forEach((raw, i) => {
+      const at = `$.bets[${i}]`;
+      const idea = bets.get(raw?.idea);
+      if (!idea) { errors.push(`${at}.idea: "${raw?.idea ?? ''}" is not a bold idea that fell in this session; they are ${[...bets.keys()].join(', ') || 'none'}`); return; }
+      if (covered.has(idea.id)) { errors.push(`${at}.idea: ${idea.id} appears twice`); return; }
+      covered.add(idea.id);
+      errors.push(...linkErrors(raw, at, model));
+      const b = unlinked(raw);
+      errors.push(...textErrors(b.sentence, `${at}.sentence`, 20, 260), ...textErrors(b.worthIt, `${at}.worthIt`, 20, 400));
+      for (const key of Object.keys(raw)) if (!['idea', 'sentence', 'worthIt'].includes(key)) errors.push(`${at}: unknown property "${key}"`);
+      const stray = strayNumbers(JSON.stringify(b), numbersOf(sourcesOf(idea)));
+      if (stray.length) errors.push(`${at}: the number${stray.length > 1 ? 's' : ''} ${stray.join(', ')} ${stray.length > 1 ? 'are' : 'is'} not in the debate on ${idea.id}`);
+    });
+    for (const id of bets.keys()) if (!covered.has(id)) errors.push(`$.bets: ${id} "${bets.get(id).title}" is missing: every bold idea that fell is reported with what would make it worth trying`);
+  }
+
+  const stray = strayNumbers(one(unlinked(doc.summary)), all);
   if (stray.length) errors.push(`$.summary: the number${stray.length > 1 ? 's' : ''} ${stray.join(', ')} ${stray.length > 1 ? 'are' : 'is'} not in the record`);
 
   // The questions for the person, in the reader's words: each one of the record is covered, none is invented.
@@ -205,13 +259,13 @@ export function validateSuggestions(doc, model, { strict = true } = {}) {
   else if (!Array.isArray(doc.plan) || doc.plan.length > MAX_PLAN || (ids.size && !doc.plan.length)) errors.push(`$.plan: one to ${MAX_PLAN} steps, in the order to take them, each { "text", "ideas": ["I21"] }`);
   else doc.plan.forEach((p, i) => {
     const at = `$.plan[${i}]`;
-    errors.push(...textErrors(p?.text, `${at}.text`, 10, 220));
+    errors.push(...textErrors(unlinked(p?.text), `${at}.text`, 10, 220), ...linkErrors(p?.text, `${at}.text`, model));
     if (!Array.isArray(p?.ideas) || !p.ideas.length) errors.push(`${at}.ideas: the ledger ids of the survivors this step is about, such as ["I21"]`);
     else for (const id of p.ideas) if (!ids.has(id)) errors.push(`${at}.ideas: "${id}" is not a survivor of this session`);
-    const stray = strayNumbers(one(p?.text), all);
+    const stray = strayNumbers(one(unlinked(p?.text)), all);
     if (stray.length) errors.push(`${at}.text: the number${stray.length > 1 ? 's' : ''} ${stray.join(', ')} ${stray.length > 1 ? 'are' : 'is'} not in the record`);
   });
-  for (const key of Object.keys(doc)) if (!['summary', 'plan', 'survivors', 'questions'].includes(key)) errors.push(`$: unknown property "${key}"`);
+  for (const key of Object.keys(doc)) if (!['summary', 'plan', 'survivors', 'bets', 'questions'].includes(key)) errors.push(`$: unknown property "${key}"`);
   return errors;
 }
 
@@ -350,7 +404,7 @@ export function validateReview(review, kind, { discussion }) {
   return errors;
 }
 
-const LAYOUT_KINDS = ['overlap', 'split-box', 'empty-page', 'large-gap', 'orphan', 'overflow', 'cut-off', 'broken-text', 'inconsistent', 'other'];
+const LAYOUT_KINDS = ['overlap', 'split-box', 'empty-page', 'large-gap', 'orphan', 'overflow', 'cut-off', 'broken-text', 'inconsistent', 'unrecognisable', 'other'];
 
 export function validateLayout(review, { doc, pages }) {
   const errors = [];

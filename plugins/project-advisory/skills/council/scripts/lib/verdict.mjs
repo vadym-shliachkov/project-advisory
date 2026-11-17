@@ -1,7 +1,7 @@
 import path from 'node:path';
 import { readJson, writeJson } from './io.mjs';
 import { takeTurn } from './session.mjs';
-import { thread, inThread, testErrors, SCALES } from './record.mjs';
+import { thread, inThread, testErrors, whereErrors, cleanWhere, SCALES } from './record.mjs';
 import { applyIdeas } from './ideas.mjs';
 
 // The judge's rulings. Every admitted idea ends in exactly one of four verdicts; the red team then looks at the
@@ -81,6 +81,9 @@ function rulingErrors(r, at, ctx) {
       if (r.narrowed.killCondition !== undefined) errors.push(...textError(r.narrowed.killCondition, `${at}.narrowed.killCondition`, 10, 400));
       // A direction narrowed to its first page is an addition or an adjustment now; the documents say how far it reaches.
       if (r.narrowed.scale !== undefined && !SCALES.includes(r.narrowed.scale)) errors.push(`${at}.narrowed.scale: ${SCALES.join(', ')}`);
+      // A smaller form that moved to another page, or to one part of it, says where it is now; otherwise it keeps the
+      // places of the idea as proposed.
+      errors.push(...whereErrors(r.narrowed.where, `${at}.narrowed.where`));
       if (r.narrowed.test !== undefined) errors.push(...testErrors(r.narrowed.test, `${at}.narrowed.test`));
       // A test left out is taken from the proposer's narrowing, which was written for the debate, not for the reader.
       else if (readerErrorsIn(lastTest(ctx.record, r.thread) ?? {}, '').length) errors.push(`${at}.narrowed.test: the test the proposer gave with the narrowing speaks in the labels of the debate; write the test of the smaller idea here, in words for a reader who did not see it`);
@@ -108,6 +111,7 @@ const clean = (r) => ({
     ...(r.narrowed.test ? { test: cleanTest(r.narrowed.test) } : {}),
     ...(r.narrowed.killCondition ? { killCondition: one(r.narrowed.killCondition) } : {}),
     ...(r.narrowed.scale ? { scale: r.narrowed.scale } : {}),
+    ...(r.narrowed.where?.length ? { where: cleanWhere(r.narrowed.where) } : {}),
   } } : {}),
   ...(r.verdict === 'killed' || (r.verdict === 'narrowed' && r.causeOfDeath) ? { causeOfDeath: one(r.causeOfDeath) } : {}),
   ...(r.verdict === 'undecided' ? { wouldDecide: one(r.wouldDecide) } : {}),
@@ -239,6 +243,8 @@ export function finalise(ctx, { ideas, date } = {}) {
       return {
         title: r.narrowed.title, goal: parent.goal, proposedBy: parent.proposedBy, parent: parent.id, effort: parent.effort,
         ...(r.narrowed.scale ?? parent.scale ? { scale: r.narrowed.scale ?? parent.scale } : {}),
+        ...(parent.novelty ? { novelty: parent.novelty } : {}),
+        ...((r.narrowed.where ?? parent.where)?.length ? { where: r.narrowed.where ?? parent.where } : {}),
         test: r.narrowed.test ?? lastTest(record, r.thread) ?? parent.test,
         hypothesis: { ...parent.hypothesis, change: r.narrowed.change, effect: r.narrowed.effect, killCondition: r.narrowed.killCondition ?? parent.hypothesis.killCondition },
       };

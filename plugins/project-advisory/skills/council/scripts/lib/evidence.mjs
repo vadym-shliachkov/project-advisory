@@ -91,6 +91,8 @@ export function addEvidence(evidence, items, { by, root, session, date = today()
     if (text.length < 10) { errors.push(`${at}.text: say what was seen or measured, in at least 10 characters`); return; }
     if (text.length > TEXT_MAX) { errors.push(`${at}.text: at most ${TEXT_MAX} characters; one fact per entry`); return; }
     if (item.grade !== 'argued' && !one(item.source)) { errors.push(`${at}.source: ${item.grade} evidence needs its source`); return; }
+    // An opening from the horizon scan is a change in the world; without the page that reports it, it is a guess.
+    if (by === 'horizon' && !/^https?:\/\/\S+$/i.test(one(item.source))) { errors.push(`${at}.source: an opening needs the address of the page that reports it, and its "date" when the page gives one`); return; }
     const { grade, warning } = gradeFor(item, { root, session, facts });
     if (warning) warnings.push(warning);
     const source = one(item.source) || null;

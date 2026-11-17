@@ -45,6 +45,7 @@ function proposed(each = 1, opts) {
   let n = 0;
   for (const role of proposers(ctx.session)) ok(say(ctx, role, Array.from({ length: each }, () => hyp(++n))));
   move(ctx);
+  move(ctx, { force: true });
   assert.equal(ctx.session.phase, 'docket');
   return ctx;
 }
@@ -52,7 +53,7 @@ function proposed(each = 1, opts) {
 // All ideas admitted; the session is in round one, waiting for the attackers.
 function examining(each = 1, opts) {
   const ctx = proposed(each, opts);
-  ok(saveDocket(ctx, { admitted: ctx.record.threads.map((t) => ({ thread: t.id })) }, { ideas: [] }));
+  ok(saveDocket(ctx, { admitted: ctx.record.threads.map((t) => ({ thread: t.id, novelty: 'familiar' })) }, { ideas: [] }));
   move(ctx);
   assert.deepEqual([ctx.session.phase, ctx.session.round, ctx.session.step], ['examine', 1, 'attack']);
   return ctx;
@@ -83,7 +84,7 @@ test('a session gets the date as its id, the default cast, and its folder is ign
   const { dir, session: s } = createSession(root, { date: '2026-11-15' });
   assert.equal(s.id, '2026-11-15');
   assert.equal(dir, path.join(root, '.project-health', 'council', '2026-11-15'));
-  assert.deepEqual([s.phase, s.runs, s.budget, s.closing], ['open', 0, 50, false]);
+  assert.deepEqual([s.phase, s.runs, s.budget, s.closing], ['open', 0, 60, false]);
   assert.equal(s.cast.length, 9);
   assert.deepEqual(proposers(s), ['client', 'search', 'content', 'conversion', 'competitors', 'outsider']);
   assert.equal(fs.readFileSync(path.join(root, '.project-health', '.gitignore'), 'utf8'), 'runs/\nprofile.json\nlatest.json\ncouncil/\n');
@@ -130,7 +131,7 @@ test('a session the person does not continue is set aside in any phase, and a ne
 test('init says when the budget cannot pay for one full round of the debate', () => {
   const root = tmpDir();
   const small = councilInit({ root, budget: '24' });
-  assert.match(small.warnings[0], /^With a budget of 24, the debate has 12 agent runs .* one full round of attack and reply takes about 21\. .* at least 33/);
+  assert.match(small.warnings[0], /^With a budget of 24, the debate has 12 agent runs .* one full round of attack and reply takes about 28\. .* at least 40/);
 });
 
 test('init asks for the business name when the documents would carry the folder name', () => {
@@ -193,6 +194,7 @@ test('phases only move forward, one at a time, and each asks for what it needs',
   assert.match(errorOf(advance(ctx, { force: true })), /Nobody has proposed anything yet/);
   ok(say(ctx, 'search', [hyp(1), hyp(2)]));
   assert.match(errorOf(advance(ctx)), /have not taken their turn/, 'the others are still waited for');
+  move(ctx, { force: true });
   move(ctx, { force: true });
   assert.equal(ctx.session.phase, 'docket');
   assert.match(errorOf(advance(ctx)), /The docket has not been saved/);
@@ -337,7 +339,7 @@ test('a hypothesis must be provable wrong: every part, a test and an effort leve
   assert.match(text, /\[3\]\.hypothesis: unknown property "budget"/);
   assert.match(text, /\[4\]\.evidence: there is no evidence E9/);
   assert.match(text, /\[5\]\.whatChanged: say what is different since I7 was decided/);
-  assert.match(text, /\[6\]\.type: in this step \(propose\) a statement is one of hypothesis/);
+  assert.match(text, /\[6\]\.type: in this step \(propose, first\) a statement is one of hypothesis/);
   assert.equal(ctx.record.threads.length, 0, 'nothing is saved when anything is refused');
   assert.match(errorOf(say(ctx, 'red-team', [hyp(1)])), /red-team does not propose ideas/);
   assert.match(errorOf(say(ctx, 'butler', [])), /Unknown or missing --role "butler"/);
@@ -348,13 +350,20 @@ test('every idea says how far it reaches, and every proposer brings at least one
   const ctx = session();
   move(ctx); move(ctx); move(ctx);
   assert.match(errorOf(say(ctx, 'search', [hyp(1, { scale: 'huge' })])), /\[0\]\.scale: adjustment \(a change to what is there\), addition .* direction .* or new \(something the business does not do or have at all\)/);
-  assert.match(errorOf(say(ctx, 'search', [hyp(1, { scale: 'adjustment' }), hyp(2, { scale: 'direction' })])), /At least one of your hypotheses is new: something the business does not do or have at all/);
+  const at = { where: [{ url: 'https://acme.test/services', part: 'the list of services', text: 'Our services' }] };
+  assert.match(errorOf(say(ctx, 'search', [hyp(1, { scale: 'adjustment' })])), /\[0\]\.where: say where the idea applies/, 'a change to a page says which page, and which part of it');
+  const bad = errorOf(say(ctx, 'search', [hyp(1, { scale: 'adjustment', where: [{ url: 'services', part: 'x' }] })]));
+  for (const part of [/\.where\[0\]\.url: the full address/, /\.where\[0\]\.part: the part of the page/, /\.where\[0\]\.text: words shown in that part/]) assert.match(bad, part);
+  assert.match(errorOf(say(ctx, 'search', [hyp(1, { scale: 'adjustment', ...at }), hyp(2, { scale: 'direction', ...at })])), /At least one of your hypotheses is new: something the business does not do or have at all/);
   assert.equal(ctx.record.threads.length, 0, 'a set without anything new is refused whole');
-  ok(say(ctx, 'search', [hyp(1, { scale: 'adjustment' }), hyp(2)]));
+  ok(say(ctx, 'search', [hyp(1, { scale: 'adjustment', ...at }), hyp(2)]));
   assert.deepEqual(ctx.record.statements.map((s) => s.scale), ['adjustment', 'new']);
   // A new idea already on the table counts for a later save.
-  ok(say(ctx, 'search', [hyp(3, { scale: 'adjustment' })]));
+  ok(say(ctx, 'search', [hyp(3, { scale: 'adjustment', ...at })]));
   assert.equal(ok(say(ctx, 'outsider', [])).added.length, 0, 'an empty turn needs nothing new');
+  assert.equal(ok(say(ctx, 'content', [hyp(9, { ...at })])).added.length, 1, 'a new idea may name a place too');
+  assert.deepEqual(ctx.record.statements.at(-1).where, at.where);
+  assert.deepEqual(ctx.record.statements[0].where, at.where, 'the place is kept with the idea');
 });
 
 test('each idea becomes a thread; a role proposes at most four, and a retried save adds nothing', () => {
@@ -382,7 +391,7 @@ test('the docket places every idea: admitted, merged or refused with a reason', 
   const ctx = proposed();
   const all = ctx.record.threads.map((t) => t.id);
   assert.deepEqual(all, ['T1', 'T2', 'T3', 'T4', 'T5', 'T6']);
-  const bad = saveDocket(ctx, { admitted: [{ thread: 'T1', merge: ['T2', 'T9'] }, { thread: 'T2' }], refused: [{ thread: 'T3', reason: 'no' }] }, { ideas: [] });
+  const bad = saveDocket(ctx, { admitted: [{ thread: 'T1', merge: ['T2', 'T9'], novelty: 'familiar' }, { thread: 'T2', novelty: 'familiar' }], refused: [{ thread: 'T3', reason: 'no' }] }, { ideas: [] });
   const text = errorOf(bad);
   assert.match(text, /merge\[1\]: there is no thread T9/);
   assert.match(text, /\$\.admitted\[1\]\.thread: T2 is already listed as merged into T1/);
@@ -391,11 +400,11 @@ test('the docket places every idea: admitted, merged or refused with a reason', 
   assert.equal(ctx.record.docket, null);
 
   const r = ok(saveDocket(ctx, {
-    admitted: [{ thread: 'T1', merge: ['T2'] }, { thread: 'T4' }, { thread: 'T5' }],
+    admitted: [{ thread: 'T1', merge: ['T2'], novelty: 'familiar' }, { thread: 'T4', novelty: 'familiar' }, { thread: 'T5', novelty: 'familiar' }],
     refused: [{ thread: 'T3', reason: 'The roadmap already plans this', ref: 'S3' }, { thread: 'T6', reason: 'Tracking before consent is not allowed', ref: 'K1' }],
   }, { ideas: [], date: '2026-11-15' }));
   assert.deepEqual(r.admitted, [{ thread: 'T1', idea: 'I1' }, { thread: 'T4', idea: 'I2' }, { thread: 'T5', idea: 'I3' }]);
-  assert.deepEqual(thread(ctx.record, 'T1'), { id: 'T1', by: 'client', title: 'Idea 1: a case study on the services page', status: 'admitted', closed: null, ideaId: 'I1', mergedFrom: ['T2'] });
+  assert.deepEqual(thread(ctx.record, 'T1'), { id: 'T1', by: 'client', title: 'Idea 1: a case study on the services page', status: 'admitted', closed: null, ideaId: 'I1', novelty: 'familiar', mergedFrom: ['T2'] });
   assert.deepEqual([thread(ctx.record, 'T2').status, thread(ctx.record, 'T2').mergedInto], ['merged', 'T1']);
   assert.deepEqual(thread(ctx.record, 'T3').refused, { reason: 'The roadmap already plans this', ref: 'S3' });
   assert.deepEqual(r.ideas[0].test, { what: 'Publish one case study and compare contact-page visits', metric: 'contact-page visits', threshold: '20 a month', checkAfter: 'six weeks' });
@@ -410,7 +419,7 @@ test('an idea that returns from the dead needs "what changed", or nothing of the
   ideaSave({ root, by: 'council' }, stdin({ ideas: [hyp(0)].map(({ title, hypothesis }) => ({ title, hypothesis, proposedBy: 'content' })) }));
   ideaSave({ root, by: 'council' }, stdin({ ideas: [{ id: 'I1', status: 'killed', verdict: { causeOfDeath: 'The client does not allow results to be published' } }] }));
   const ctx = proposed();
-  const admitted = ctx.record.threads.map((t) => ({ thread: t.id }));
+  const admitted = ctx.record.threads.map((t) => ({ thread: t.id, novelty: 'familiar' }));
   admitted[2].returns = 'I1';
   const refused = saveDocket(ctx, { admitted }, { ideas: loadIdeas(root) });
   assert.match(errorOf(refused), /\$\.admitted\[2\] \(T3\)\.whatChanged: I1 "Idea 0: a case study on the services page" was killed; say what is different now/);
@@ -592,15 +601,15 @@ test('a question is kept for the person, and closes nothing when it is asked', (
 
 test('every agent run is counted; at 80% of the debate allowance the session stops opening rounds', () => {
   const { session: s } = session();
-  assert.deepEqual(budgetOf(s), { total: 50, forDebate: 38, spent: 0, closing: false });
-  for (let n = 0; n < 30; n++) spendRun(s, { role: 'search', phase: 'examine' });
-  assert.equal(s.closing, false, '30 of 38 is 79%');
+  assert.deepEqual(budgetOf(s), { total: 60, forDebate: 48, spent: 0, closing: false });
+  for (let n = 0; n < 38; n++) spendRun(s, { role: 'search', phase: 'examine' });
+  assert.equal(s.closing, false, '38 of 48 is 79%');
   spendRun(s, { role: 'search', phase: 'examine' });
-  assert.equal(s.closing, true, '31 of 38 is over 80%');
-  for (let n = 0; n < 7; n++) spendRun(s, { role: 'search', phase: 'examine' });
-  assert.throws(() => spendRun(s, { role: 'search', phase: 'examine' }), /The debate has used its 38 agent runs \(budget 50, 12 kept for the verdict and the documents\)/);
+  assert.equal(s.closing, true, '39 of 48 is over 80%');
+  for (let n = 0; n < 9; n++) spendRun(s, { role: 'search', phase: 'examine' });
+  assert.throws(() => spendRun(s, { role: 'search', phase: 'examine' }), /The debate has used its 48 agent runs \(budget 60, 12 kept for the verdict and the documents\)/);
   spendRun(s, { role: 'judge', phase: 'verdict' });
-  assert.equal(s.runs, 39, 'the verdict and the documents are never refused');
+  assert.equal(s.runs, 49, 'the verdict and the documents are never refused');
   assert.deepEqual(s.log.at(-1).role, 'judge');
 });
 
@@ -619,7 +628,7 @@ test('when the budget closes the debate, the round is finished and open threads 
 
   const spent = examining();
   ok(say(spent, 'red-team', [steelman('T1'), attack('T1')]));
-  spent.session.runs = 38;
+  spent.session.runs = 48;
   spent.session.closing = true;
   assert.equal(move(spent, { force: true }).to.phase, 'verdict');
   assert.deepEqual(thread(spent.record, 'T1').closed, { round: 1, reason: 'the budget ran out', cutOff: true }, 'a proposer who could not be started did not refuse to answer');
@@ -629,7 +638,7 @@ test('once the debate has spent its runs, status lists no turn that would be ref
   const ctx = examining();
   ok(say(ctx, 'red-team', [steelman('T1'), attack('T1')]));
   assert.ok(turns(ctx.session, ctx.record).some((t) => !t.done), 'other attackers still have a turn');
-  ctx.session.runs = 38;
+  ctx.session.runs = 48;
   ctx.session.closing = true;
   assert.deepEqual(turns(ctx.session, ctx.record).filter((t) => !t.done), [], 'nobody is listed who could not be started');
   assert.match(nextStep(ctx.session, ctx.record, ctx.evidence), /a refusal for the budget is final/);
@@ -642,7 +651,7 @@ test('status lists no more turns not yet taken than the runs left can start; a m
   const ctx = examining();
   const waiting = () => turns(ctx.session, ctx.record).filter((t) => !t.done).map((t) => t.role);
   assert.ok(waiting().length > 2, 'every attacker has a turn while the runs last');
-  ctx.session.runs = 36;
+  ctx.session.runs = 46;
   assert.deepEqual(waiting(), ['red-team', 'client'], 'two runs left: the first two attackers');
   spendRun(ctx.session, { role: 'red-team', phase: 'examine' });
   spendRun(ctx.session, { role: 'client', phase: 'examine' });
@@ -656,15 +665,15 @@ test('status lists no more turns not yet taken than the runs left can start; a m
 
 test('the judge is started for the docket even when the debate has spent its runs, so the proposals are not lost', () => {
   const ctx = proposed();
-  ctx.session.runs = 38;
+  ctx.session.runs = 48;
   assert.deepEqual(turns(ctx.session, ctx.record).map((t) => [t.role, t.done]), [['judge', false]]);
   assert.match(nextStep(ctx.session, ctx.record, ctx.evidence), /Start the judge for the docket/);
   spendRun(ctx.session, { role: 'judge', phase: 'docket' });
-  assert.equal(ctx.session.runs, 39, 'paid from the reserve');
-  ok(saveDocket(ctx, { admitted: ctx.record.threads.map((t) => ({ thread: t.id })) }, { ideas: [] }));
+  assert.equal(ctx.session.runs, 49, 'paid from the reserve');
+  ok(saveDocket(ctx, { admitted: ctx.record.threads.map((t) => ({ thread: t.id, novelty: 'familiar' })) }, { ideas: [] }));
   move(ctx);
   assert.deepEqual([ctx.session.phase, ctx.session.step], ['examine', 'attack']);
-  assert.throws(() => spendRun(ctx.session, { role: 'red-team', phase: 'examine' }), /The debate has used its 38 agent runs/);
+  assert.throws(() => spendRun(ctx.session, { role: 'red-team', phase: 'examine' }), /The debate has used its 48 agent runs/);
   assert.equal(move(ctx).to.phase, 'verdict', 'nobody can attack, so the judge rules on what was admitted');
 });
 
@@ -684,10 +693,11 @@ test('a session can be stopped and picked up again from disk with the same state
   for (const role of proposers(resolveSession(root).session)) assert.equal(councilSay({ root, role }, stdin({ statements: [hyp(++n), hyp(++n)] })).ok, true);
   const bad = councilSay({ root, role: 'search' }, stdin({ statements: [hyp(99, { effort: 'huge' })] }));
   assert.deepEqual([bad.ok, bad.errors.length], [false, 1]);
-  assert.equal(councilNext({ root }).to.phase, 'docket');
+  assert.equal(councilNext({ root }).to.step, 'second');
+  assert.equal(councilNext({ root, force: true }).to.phase, 'docket');
   assert.match(councilStatus({ root }).next, /Start the judge for the docket/);
   assert.throws(() => councilVerdict({ root, stage: 'ruling' }, stdin({})), /Valid stages: docket, verdict, set/);
-  const docket = councilVerdict({ root, stage: 'docket' }, stdin({ admitted: Array.from({ length: 12 }, (_, i) => ({ thread: `T${i + 1}` })) }));
+  const docket = councilVerdict({ root, stage: 'docket' }, stdin({ admitted: Array.from({ length: 12 }, (_, i) => ({ thread: `T${i + 1}`, novelty: 'familiar' })) }));
   assert.equal(docket.ok, true);
   assert.equal(loadIdeas(root).length, 12);
   councilNext({ root });

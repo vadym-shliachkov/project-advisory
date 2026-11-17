@@ -42,8 +42,9 @@ function sessionAt(phase, opts = {}) {
   if (phase === 'propose') return out;
   ROLES.forEach((role, n) => assert.equal(say({ root, role }, stdin({ statements: [hyp(n + 1, n === 1 ? { evidence: ['E1'] } : {})] })).ok, true));
   next(o);
+  next({ ...o, force: true });
   if (phase === 'docket') return out;
-  assert.equal(verdict({ root, stage: 'docket' }, stdin({ admitted: ROLES.map((_, n) => ({ thread: `T${n + 1}` })) })).ok, true);
+  assert.equal(verdict({ root, stage: 'docket' }, stdin({ admitted: ROLES.map((_, n) => ({ thread: `T${n + 1}`, novelty: 'familiar' })) })).ok, true);
   next(o);
   if (phase === 'examine') return out;
   // Round one on T2 (proposed by search), with names where they do not belong.
@@ -100,9 +101,9 @@ test('every context counts one run, and a debating agent cannot be started once 
   context({ ...o, role: 'search' });
   assert.equal(status(o).budget.spent, 2, 'a retry is a run too');
   const { session } = loadSession(root, path.basename(dir));
-  saveSession(dir, { ...session, runs: 38 });
-  assert.throws(() => context({ ...o, role: 'content' }), /The debate has used its 38 agent runs/);
-  assert.equal(status(o).budget.spent, 38);
+  saveSession(dir, { ...session, runs: 48 });
+  assert.throws(() => context({ ...o, role: 'content' }), /The debate has used its 48 agent runs/);
+  assert.equal(status(o).budget.spent, 48);
 });
 
 test('a context is refused when it is not that role\'s turn', () => {
@@ -135,7 +136,7 @@ test('the competitor analyst looks around before anyone proposes, and that turn 
   assert.ok(text.startsWith('# Reconnaissance'));
   assert.match(text, /evidence --role competitors --root/);
   assert.match(text, /\*\*Never submit a form\.\*\*/, 'the one who looks around is told not to send anything');
-  assert.throws(() => context({ ...o, role: 'search' }), /only the competitor analyst looks around/);
+  assert.throws(() => context({ ...o, role: 'search' }), /only the competitor analyst and the horizon scan look around/);
   assert.equal(next(o).ok, true, 'the session does not wait for an optional turn');
 });
 
@@ -297,12 +298,12 @@ test('a fact about the goal does not disturb a session under way', () => {
 test('a refused save leaves a trace in the session, and a merged idea keeps what it would have changed', () => {
   const { root, o, dir, material } = sessionAt('docket');
   assert.equal(say({ root, role: 'search' }, stdin({ statements: [{ type: 'attack', thread: 'T1' }] })).ok, false);
-  assert.equal(verdict({ root, stage: 'docket' }, stdin({ admitted: [{ thread: 'T1' }] })).ok, false);
+  assert.equal(verdict({ root, stage: 'docket' }, stdin({ admitted: [{ thread: 'T1', novelty: 'familiar' }] })).ok, false);
   const log = loadSession(root, path.basename(dir)).session.refused;
   assert.deepEqual(log.map((r) => [r.role, r.command, r.phase]), [['search', 'say', 'docket'], ['judge', 'verdict docket', 'docket']]);
   assert.ok(log[1].errors >= 5 && log[1].first.length > 10);
 
-  assert.equal(verdict({ root, stage: 'docket' }, stdin({ admitted: [{ thread: 'T1', merge: ['T2'] }, ...[3, 4, 5, 6].map((n) => ({ thread: `T${n}` }))] })).ok, true);
+  assert.equal(verdict({ root, stage: 'docket' }, stdin({ admitted: [{ thread: 'T1', merge: ['T2'], novelty: 'familiar' }, ...[3, 4, 5, 6].map((n) => ({ thread: `T${n}`, novelty: 'familiar' }))] })).ok, true);
   next(o);
   context({ ...o, role: 'red-team' });
   const t1 = material('round1-attack-red-team').threads.find((t) => t.id === 'T1');

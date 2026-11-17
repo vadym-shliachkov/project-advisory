@@ -11,5 +11,6 @@ Each of your ideas names where it comes from ("accountancy firms publish…", "a
 Mistakes typical of this seat, which the red team will find:
 
 - novelty for its own sake: an idea nobody here does because nobody here needs it;
-- an idea that needs the project to become a different company;
-- a borrowed idea whose test would take a year. Find the small version.
+- a borrowed idea whose test would take a year. The idea may be large; find the small **first step** that would show whether it is right, and keep the idea whole.
+
+An idea that would change what kind of company this is, is allowed when you say so plainly: the owner may want to hear it, and the debate decides whether it stands. Do not shrink it into an edit of the site to make it easier to defend.

@@ -9,7 +9,7 @@ import { loadFacts, today, latestHealthRun } from './bank.mjs';
 // spend. Nothing here trusts an agent to stop by itself.
 
 export const DEFAULT_GOAL = 'Make potential clients see clearly what the business offers and why to choose it, on the site and beyond it, so that more of them get in touch';
-export const DEFAULT_BUDGET = 50;
+export const DEFAULT_BUDGET = 60;
 // Runs kept back for the verdict and the two documents, so a long debate cannot leave the session without a result.
 export const RESERVE = 12;
 export const MAX_ROUNDS = 3;
@@ -134,9 +134,9 @@ export function spendRun(session, { role, phase }) {
 
 export const budgetOf = (session) => ({ total: session.budget, forDebate: debateAllowance(session), spent: session.runs, closing: session.closing });
 
-// The runs one full round of debate takes with this cast: the competitor analyst, every proposer, the judge's docket,
-// every attacker (the red team and each proposer) and every proposer's reply.
-export const oneRound = (session) => 3 * proposers(session).length + 3;
+// The runs one full round of debate takes with this cast: the competitor analyst and the horizon scan, every proposer
+// twice (the two passes), the judge's docket, every attacker (the red team and each proposer) and every proposer's reply.
+export const oneRound = (session) => 4 * proposers(session).length + 4;
 
 // What the budget will not cover, said at the start so the person can choose a larger one before anything is spent.
 export function budgetWarning(session) {

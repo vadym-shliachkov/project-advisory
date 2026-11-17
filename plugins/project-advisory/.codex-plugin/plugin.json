@@ -1,6 +1,6 @@
 {
   "name": "project-advisory",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Advice for a web project: a health check with a branded PDF report, an implementation roadmap, and a weekly council that proposes and stress-tests ideas for growth.",
   "skills": "./skills/"
 }

@@ -22,6 +22,7 @@ If your tools cannot show you the pages of a PDF, do not guess: deliver `{ "doc"
 - `cut-off`: text, a row or an image that is clipped and cannot be read at all.
 - `broken-text`: visible markup or escaping (`&amp;`, `&#39;`, `<b>`, `\n`, `undefined`, `null`, `NaN`, `[object Object]`), an empty field label, placeholder text, or a wrong or garbled company or project name.
 - `inconsistent`: the same kind of block styled differently from one place to another (spacing, colours, widths, alignment), or the highlight of a chosen row covering only part of the row.
+- `unrecognisable`: a page, a section or a block of the site named in an idea, a step or a bet that the reader can neither open (no link) nor see (no picture of it nearby), so they would have to know the site by heart; a picture whose outline sits on a different part than the text names; a picture that shows only the top of a page while the text speaks of a part further down, without saying so. Look at the "Where" pictures with this in mind.
 - `other`: anything else that would make a careful reader think the document is broken or careless.
 
 Spacing that follows the document's design (a new section starting on a new page, a short last page) is not a defect. A long text that simply continues on the next page is not a defect.

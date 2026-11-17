@@ -5,6 +5,7 @@ import { SKILL_DIR } from './paths.mjs';
 import { buildModel, loadDoc, saveDoc, docPath, validateSuggestions, mergeDiscussion, discussionGaps, validateReview, validateLayout } from './documents.mjs';
 import { buildSuggestionsHtml, buildDiscussionHtml } from './html.mjs';
 import { findBrowser, printPdf, pdfPageCount, lookSlug } from './browser.mjs';
+import { shootParts } from './shots.mjs';
 
 // After the verdicts are final: the two documents are written, printed, read by reviewers who did not write them,
 // corrected once, and the session is closed. Like the debate, this part has turns, and it cannot loop: the minutes
@@ -59,11 +60,62 @@ export function docNextStep(ctx, root) {
   const s = docState(ctx, root);
   const waiting = docTurns(ctx, root).filter((t) => !t.done).map((t) => t.name);
   if (session.phase === 'write') {
-    return waiting.length ? `Start ${waiting.join(' and ')}, at once.` : 'Both documents are written. Run "next": it prints them and opens the review.';
+    const shots = s.docs.shots ? '' : 'Run "shots" (it photographs the part of each page the ideas are about; give it up to ten minutes). ';
+    return waiting.length ? `${shots}Start ${waiting.join(' and ')}, at once.` : `${shots}Both documents are written. Run "next": it prints them and opens the review.`;
   }
   if (s.docs.stale) return 'A document changed after it was printed. Run "render", then start the layout reviewers again.';
   if (waiting.length) return `Start, at once: ${waiting.join('; ')}.`;
   return 'The documents are reviewed. Run "close" to finish the session.';
+}
+
+// ---- Pictures of the places the ideas apply to ----
+
+// Every place an admitted idea names, in the form it was ruled on: the smaller form's places when the judge moved it.
+export const partsPath = (dir) => path.join(dir, 'parts.json');
+export const loadParts = (dir) => readJson(partsPath(dir), null);
+export function placesOf(model) {
+  return model.ideas.flatMap((idea) => (idea.where ?? []).map((w, i) => ({ key: `${idea.thread}-${i + 1}`, thread: idea.thread, ...w, file: `parts/${idea.thread}-${i + 1}.png` })));
+}
+
+// Photographs each place once the verdicts are final, so the documents show the part of the page an idea is about,
+// outlined, instead of asking the reader to remember the site. Without a browser the documents still link each page.
+export async function takePictures(ctx, root, { browser = findBrowser(), shoot = shootParts } = {}) {
+  const { dir, session } = ctx;
+  if (!['write', 'review'].includes(session.phase)) return { errors: [`The places are photographed once the verdicts are final; the session is in the ${session.phase} phase`] };
+  const places = placesOf(buildModel(ctx, root));
+  const docs = docsOf(session);
+  if (!browser) {
+    docs.shots = { at: new Date().toISOString(), taken: 0, missing: places.length, noBrowser: true };
+    writeJson(partsPath(dir), { takenAt: docs.shots.at, places: places.map((p) => ({ ...p, file: null, error: 'no browser' })) });
+    return { errors: [], warnings: ['No Chrome, Edge or Chromium was found, so no place was photographed. The documents link every page instead. Install one of them or set CHROME_PATH, then run "shots" again.'], places: places.length, taken: 0 };
+  }
+  const byUrl = new Map();
+  for (const p of places) {
+    if (!byUrl.has(p.url)) byUrl.set(p.url, []);
+    byUrl.get(p.url).push({ key: p.key, selector: p.selector, text: p.text, file: path.join(dir, p.file) });
+  }
+  const results = await shoot(browser, [...byUrl].map(([url, parts]) => ({ url, parts })));
+  const at = new Date().toISOString();
+  const out = places.map((p) => {
+    const r = results.find((x) => x.key === p.key) ?? { error: 'not photographed' };
+    return { ...p, file: r.error ? null : p.file, found: Boolean(r.found), ...(r.how ? { how: r.how } : {}), ...(r.error ? { error: r.error } : {}) };
+  });
+  writeJson(partsPath(dir), { takenAt: at, places: out });
+  const taken = out.filter((p) => p.file).length;
+  const lost = out.filter((p) => p.file && !p.found);
+  docs.shots = { at, taken, missing: out.length - taken, notFound: lost.length };
+  docs.stale = session.phase === 'review';
+  const warnings = [
+    ...out.filter((p) => p.error).map((p) => `${p.key} (${p.url}): no picture: ${p.error}`),
+    ...lost.map((p) => `${p.key}: "${p.part}" was not found on ${p.url}; the document shows the top of the page and says so`),
+  ];
+  return { errors: [], places: out.length, taken, notFound: lost.length, warnings, path: partsPath(dir) };
+}
+
+// The pictures of one idea's places, for the documents. A place with no picture is still linked.
+export function partsOf(dir) {
+  const parts = loadParts(dir);
+  return (thread) => (parts?.places ?? []).filter((p) => p.thread === thread).map((p) => ({ ...p, taken: parts.takenAt.slice(0, 10) }));
 }
 
 // The pictures members took of the pages they cite (the look command), by address: the documents show them beside the
@@ -93,8 +145,8 @@ export function renderDocs(ctx, root, { only = null, html = false, browser = fin
   if (errors.length) return { errors, warnings };
 
   const build = {
-    suggestions: () => buildSuggestionsHtml({ model: s.model, suggestions: s.suggestions, discussion: s.gaps.length ? null : s.discussion, picture: picturesOf(dir) }),
-    discussion: () => buildDiscussionHtml({ model: s.model, discussion: s.discussion }),
+    suggestions: () => buildSuggestionsHtml({ model: s.model, suggestions: s.suggestions, discussion: s.gaps.length ? null : s.discussion, picture: picturesOf(dir), parts: partsOf(dir) }),
+    discussion: () => buildDiscussionHtml({ model: s.model, discussion: s.discussion, parts: partsOf(dir) }),
   };
   const out = {};
   for (const d of wanted) {
@@ -134,6 +186,8 @@ export function advanceDocs(ctx, root, { force = false, render = renderDocs } = 
   const errors = [];
   if (!s.suggestions) errors.push('The suggestions have not been written yet.');
   if (s.gaps.length) errors.push(`The discussion is not complete: ${s.gaps.join('; ')}.`);
+  // The pictures are what lets a reader see the places the ideas name; without them the documents only link the pages.
+  if (!s.docs.shots && !force && placesOf(s.model).length) errors.push('The places the ideas apply to have not been photographed: run "shots" first (or pass --force to print without pictures, and tell the person).');
   // No document is skipped: a writer that keeps failing ends the session with "close --abandon", and the verdicts
   // already in the ledger stand.
   if (errors.length && force) errors.push('--force does not skip a document. If its writer keeps failing, tell the person which document is missing and set the session aside with "close --abandon": the verdicts are already in the idea ledger.');
@@ -222,6 +276,7 @@ const statementView = (s) => {
 };
 const ideaView = (i) => ({
   thread: i.thread, id: i.id, title: i.title, originalTitle: i.originalTitle, proposedBy: i.proposerRole, verdict: i.verdict, strength: i.strength, effort: i.effort,
+  scale: i.scale, novelty: i.novelty, ...(i.where.length ? { where: i.where } : {}), ...(i.uncovered ? { uncovered: i.uncovered } : {}),
   hypothesis: i.hypothesis, ...(i.verdict === 'narrowed' ? { asFirstProposed: i.originalHypothesis } : {}), test: i.test, ruling: i.ruling,
   ...(i.closed ? { howTheDebateEnded: i.closed.reason } : {}), ...(i.alsoCovers.length ? { alsoCovers: i.alsoCovers } : {}),
   statements: i.statements.map(statementView), evidence: i.evidence,
@@ -256,7 +311,13 @@ export function docTurn(ctx, role, root) {
       goal: m.session.goal, counts: m.counts, lacked: m.missing, grades: m.grades,
       survivors: m.survivors.map(ideaView), setNotes: m.setNotes,
       questions: m.questions.map(({ n, idea, text, for: forWhom }) => ({ n, idea, for: forWhom, text })),
-      notSurvivors: { killed: m.killed.map((i) => ({ title: i.title, causeOfDeath: i.ruling.causeOfDeath })), undecided: m.undecided.map((i) => ({ title: i.title, wouldDecide: i.ruling.wouldDecide })) },
+      notSurvivors: { killed: m.killed.filter((i) => !m.bets.includes(i)).map((i) => ({ title: i.title, causeOfDeath: i.ruling.causeOfDeath })), undecided: m.undecided.filter((i) => !m.bets.includes(i)).map((i) => ({ title: i.title, wouldDecide: i.ruling.wouldDecide })) },
+      // The bold ideas that did not survive: one entry each under "bets" in what you write.
+      bets: m.bets.map(ideaView),
+      // Which places were photographed; a part not found is shown as the top of its page.
+      pictures: (loadParts(dir)?.places ?? []).map(({ thread, url, part, found, file }) => ({ thread, url, part, photographed: Boolean(file), found })),
+      // The pages a link may point to: the places of the ideas, the evidence, and any page of the site.
+      site: m.session.url,
     };
     if (s.suggestions) extra.push(`- The suggestions as they stand, to revise: ${docPath(dir, 'suggestions')}`);
     if (s.layouts.suggestions?.defects.some((d) => d.cause === 'content')) extra.push(`- The layout review, whose "content" defects you fix (a text too long for its place, a broken character): ${docPath(dir, 'layout-suggestions')}`);

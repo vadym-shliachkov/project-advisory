@@ -28,6 +28,21 @@ const TEST_PARTS = ['what', 'metric', 'threshold', 'checkAfter'];
 // form when it rules (see verdict.mjs).
 const NARROW_PARTS = ['change', 'effect', 'test'];
 const MAX_PER_ROLE = 4;
+// Proposing takes two passes. In the first every proposer works alone; then each sees the themes already on the table
+// and brings one or two ideas on ground none of them covers. Six seats reading the same site alone proposed the same
+// four themes again and again (one offer four times); the second pass is where the themes nobody thought of come from.
+export const PASSES = ['first', 'second'];
+const SECOND_MIN = 1;
+const SECOND_MAX = 2;
+const SECOND_SCALES = ['new', 'direction'];
+export const passOf = (session) => (session.step === 'second' ? 2 : 1);
+// The docket says whether an idea is one any adviser would give any firm like this one, or one that comes from this
+// project and could not have been written without looking at it.
+export const NOVELTY = ['fresh', 'familiar'];
+// Where an idea applies, so a reader sees the place instead of remembering it: the page, the part of it in plain words
+// and how to find that part (words shown in it, or a CSS selector). The script photographs each one after the verdicts.
+const MAX_WHERE = 3;
+const WHERE_SCALES = ['adjustment', 'addition', 'direction'];
 // How far an idea reaches: a change to what is there, something new beside it, a remake of what is there (the site,
 // the position, the offer), or something the business does not do or have at all (a product, a tool, a channel, a
 // partnership, an audience). Left to themselves, proposers who start from what they saw on a page propose only the
@@ -59,6 +74,30 @@ export function testErrors(test, at) {
   return TEST_PARTS.flatMap((part) => textErrors(test, at, { field: part, min: part === 'what' ? 10 : 2, max: 300 }));
 }
 const cleanTest = (test) => Object.fromEntries([...TEST_PARTS, 'baseline'].filter((k) => one(test[k])).map((k) => [k, one(test[k])]));
+
+// The places an idea applies to. `required` when the idea changes something a reader can look at.
+export function whereErrors(where, at, { required = false } = {}) {
+  if (where === undefined) return required ? [`${at}: say where the idea applies, as [{ "url", "part", "text" }]: the page, the part of it in plain words, and words shown in that part so the script can find and photograph it. The reader of the documents does not know the site by heart`] : [];
+  if (!Array.isArray(where) || where.length > MAX_WHERE || (required && !where.length)) return [`${at}: ${required ? 'one' : 'zero'} to ${MAX_WHERE} places, each { "url", "part", "text" } (or "selector" in place of "text")`];
+  const errors = [];
+  where.forEach((w, i) => {
+    const wat = `${at}[${i}]`;
+    if (!w || typeof w !== 'object' || Array.isArray(w)) { errors.push(`${wat}: an object is required`); return; }
+    let u = null;
+    try { u = new URL(w.url); } catch { /* reported below */ }
+    if (!u || !/^https?:$/.test(u.protocol)) errors.push(`${wat}.url: the full address of the page, such as https://example.com/services/`);
+    const part = one(w.part);
+    if (part.length < 5 || part.length > 160) errors.push(`${wat}.part: the part of the page in plain words, 5 to 160 characters ("the three phases under How we work", "the whole page" for a new page's place)`);
+    const text = one(w.text);
+    const selector = one(w.selector);
+    if (!text && !selector) errors.push(`${wat}.text: words shown in that part of the page, exactly as on the page (a heading is best), so it can be found and photographed; or a CSS "selector"`);
+    if (text && (text.length < 3 || text.length > 120)) errors.push(`${wat}.text: 3 to 120 characters, copied from the page`);
+    if (selector && selector.length > 200) errors.push(`${wat}.selector: at most 200 characters`);
+    for (const key of Object.keys(w)) if (!['url', 'part', 'text', 'selector'].includes(key)) errors.push(`${wat}: unknown property "${key}"`);
+  });
+  return errors;
+}
+export const cleanWhere = (where) => (where ?? []).map((w) => ({ url: one(w.url), part: one(w.part), ...(one(w.text) ? { text: one(w.text) } : {}), ...(one(w.selector) ? { selector: one(w.selector) } : {}) }));
 
 // A question put to the proposer: raised on the thread by somebody else. The proposer's own questions go to the
 // person and change nothing in the debate.
@@ -109,7 +148,6 @@ export function assignAttackers(session, record) {
 // idea it decided.
 export function threadsFor(session, record, role) {
   const open = openThreads(record);
-  if (session.phase === 'propose') return [];
   if (session.phase !== 'examine') return [];
   if (session.step === 'attack') {
     if (role === 'red-team') return open;
@@ -128,8 +166,14 @@ export function turns(session, record, verdicts = null) {
     const s = seat(session, role);
     list.push({ role, name: s?.name ?? role, model: s?.model ?? 'standard', threads: threads.map((t) => t.id), done: turnTaken(session, role), ...extra });
   };
-  if (session.phase === 'evidence') add('competitors', [], { optional: true });
-  if (session.phase === 'propose') for (const role of proposers(session)) add(role);
+  if (session.phase === 'evidence') {
+    add('competitors', [], { optional: true });
+    // The horizon scan is not a seat: it looks outside the site, at what is changing around the business.
+    list.push({ role: 'horizon', name: 'the horizon scan', model: 'strongest', threads: [], done: turnTaken(session, 'horizon'), optional: true });
+  }
+  // Ideas are where the strongest model pays most: a weaker one proposes the familiar. In the debate the seats keep
+  // their own models, so the room does not argue with one voice.
+  if (session.phase === 'propose') for (const role of proposers(session)) add(role, [], { model: 'strongest' });
   if (session.phase === 'docket' || session.phase === 'verdict') add('judge');
   if (session.phase === 'set') {
     add('red-team');
@@ -170,6 +214,12 @@ function checkHypothesis(s, at, ctx, role) {
   errors.push(...testErrors(s.test, `${at}.test`));
   if (!['small', 'medium', 'large'].includes(s.effort)) errors.push(`${at}.effort: small, medium or large`);
   if (!SCALES.includes(s.scale)) errors.push(`${at}.scale: ${SCALE_TEXT}`);
+  errors.push(...whereErrors(s.where, `${at}.where`, { required: WHERE_SCALES.includes(s.scale) }));
+  if (passOf(session) === 2) {
+    if (SCALES.includes(s.scale) && !SECOND_SCALES.includes(s.scale)) errors.push(`${at}.scale: in the second pass an idea is new or a direction: something the business does not do yet, or a remake of what it has`);
+    const uncovered = one(s.uncovered);
+    if (uncovered.length < 20 || uncovered.length > 300) errors.push(`${at}.uncovered: in one or two sentences (20 to 300 characters), what this idea covers that none of the ideas already on the table does`);
+  } else if (s.uncovered !== undefined) errors.push(`${at}.uncovered: only an idea of the second pass says what it covers that the others do not`);
   if (s.returns !== undefined && !/^I\d{1,4}$/.test(s.returns)) errors.push(`${at}.returns: the ledger id of the idea this brings back, such as I7`);
   if (s.returns && one(s.whatChanged).length < 10) errors.push(`${at}.whatChanged: say what is different since ${s.returns} was decided`);
   return errors;
@@ -291,11 +341,16 @@ export function say(ctx, role, statements, { now = () => new Date().toISOString(
     const skipped = openThreads(record).filter((t) => session.assignments[t.id] === role && !spoke(t.id)).map((t) => t.id);
     if (skipped.length) warnings.push(`You were given ${skipped.join(', ')} to cover and said nothing on ${skipped.length > 1 ? 'them' : 'it'}: make your objection, or an attack starting "This holds:", and save again.`);
   }
-  if (session.phase === 'propose') {
-    const have = record.threads.filter((t) => t.by === role).length;
+  if (session.phase === 'propose' && passOf(session) === 1) {
+    const have = record.threads.filter((t) => t.by === role && (t.pass ?? 1) === 1).length;
     if (have + pending.length > MAX_PER_ROLE) errors.push(`At most ${MAX_PER_ROLE} hypotheses per role: you have ${have} and sent ${pending.length} more. Keep the strongest.`);
     const scales = [...record.statements.filter((x) => x.type === 'hypothesis' && x.by === role).map((x) => x.scale), ...pending.map((x) => x.scale)];
     if (pending.length && !scales.includes('new')) errors.push('At least one of your hypotheses is new: something the business does not do or have at all (a product, a tool, a channel, a partnership, an audience; see "Range" in your instructions), with a first step cheap enough to test. Replace your weakest idea with one, or send it with the others.');
+  }
+  if (session.phase === 'propose' && passOf(session) === 2) {
+    const have = record.threads.filter((t) => t.by === role && t.pass === 2).length;
+    if (have + pending.length < SECOND_MIN && !repeated) errors.push(`The second pass asks for at least ${SECOND_MIN} idea on ground none of the ideas on the table covers. Look where nobody looked: see "The second pass" in your instructions.`);
+    if (have + pending.length > SECOND_MAX) errors.push(`At most ${SECOND_MAX} ideas in the second pass: you have ${have} and sent ${pending.length} more. Keep the furthest from what is on the table.`);
   }
   if (errors.length) return { errors, warnings };
 
@@ -316,10 +371,13 @@ export function say(ctx, role, statements, { now = () => new Date().toISOString(
     const base = { n: ++n, type: s.type, by: role, round: session.round, at: now(), evidence: s.evidence ?? [] };
     if (s.type === 'hypothesis') {
       const id = `T${record.threads.reduce((max, t) => Math.max(max, Number(t.id.slice(1))), 0) + 1}`;
-      record.threads.push({ id, by: role, title: one(s.title), status: 'proposed', closed: null });
+      const pass = passOf(session);
+      record.threads.push({ id, by: role, title: one(s.title), status: 'proposed', closed: null, ...(pass === 2 ? { pass } : {}) });
       record.statements.push({
         ...base, thread: id, title: one(s.title), hypothesis: Object.fromEntries(HYPOTHESIS_PARTS.map((p) => [p, one(s.hypothesis[p])])),
         test: Object.fromEntries(Object.entries(s.test).map(([k, v]) => [k, one(v)])), effort: s.effort, scale: s.scale,
+        ...(s.where?.length ? { where: cleanWhere(s.where) } : {}),
+        ...(pass === 2 ? { pass, uncovered: one(s.uncovered) } : {}),
         ...(s.returns ? { returns: s.returns, whatChanged: one(s.whatChanged) } : {}),
       });
       added.push({ n, thread: id, type: s.type });
@@ -403,6 +461,7 @@ export function saveDocket(ctx, docket, { ideas, date } = {}) {
     note(a?.thread, `$.admitted[${i}].thread`, 'admitted');
     (a?.merge ?? []).forEach((m, j) => note(m, `$.admitted[${i}].merge[${j}]`, `merged into ${a.thread}`));
     if (a?.returns !== undefined && !/^I\d{1,4}$/.test(a.returns)) errors.push(`$.admitted[${i}].returns: a ledger id such as I7`);
+    if (!NOVELTY.includes(a?.novelty)) errors.push(`$.admitted[${i}].novelty: "fresh" when the idea could only come from looking at this project and its market, "familiar" when any adviser would give it to any firm of this kind`);
   });
   refused.forEach((r, i) => {
     note(r?.thread, `$.refused[${i}].thread`, 'refused');
@@ -419,6 +478,7 @@ export function saveDocket(ctx, docket, { ideas, date } = {}) {
     const whatChanged = a.whatChanged ?? h.whatChanged;
     return {
       title: h.title, goal: session.goal, proposedBy: h.by, hypothesis: h.hypothesis, effort: h.effort, ...(h.scale ? { scale: h.scale } : {}),
+      novelty: a.novelty, ...(h.where?.length ? { where: h.where } : {}),
       test: { what: h.test.what, metric: h.test.metric, threshold: h.test.threshold, checkAfter: h.test.checkAfter, ...(h.test.baseline ? { baseline: h.test.baseline } : {}) },
       ...(returns ? { returns, ...(whatChanged ? { whatChanged } : {}) } : {}),
     };
@@ -430,6 +490,7 @@ export function saveDocket(ctx, docket, { ideas, date } = {}) {
     const t = thread(record, a.thread);
     t.status = 'admitted';
     t.ideaId = ledger.saved[i].id;
+    t.novelty = a.novelty;
     if (a.merge?.length) t.mergedFrom = a.merge;
     for (const m of a.merge ?? []) Object.assign(thread(record, m), { status: 'merged', mergedInto: a.thread });
   });
@@ -476,11 +537,14 @@ export function advance(ctx, { force = false, ideas = [], date } = {}) {
       if (!evidence.collectedAt) errors = ['The evidence has not been collected: run "evidence --collect" first.'];
       else go('track-record');
       break;
-    case 'track-record': go('propose'); break;
+    case 'track-record': go('propose', 0, 'first'); break;
     case 'propose':
       errors = hold();
       if (!errors.length && !record.threads.length) errors = ['Nobody has proposed anything yet, so there is nothing to debate.'];
-      if (!errors.length) go('docket');
+      if (errors.length) break;
+      // The second pass needs runs of its own; with the debate's runs spent it is skipped, not cut short.
+      if (passOf(session) === 1 && !debateSpent(session)) go('propose', 0, 'second');
+      else go('docket');
       break;
     case 'docket':
       if (!record.docket) { errors = ['The docket has not been saved: the judge admits, merges or refuses every idea first.']; break; }
@@ -553,9 +617,14 @@ export function nextStep(session, record, evidence, verdicts = null) {
   const names = waiting.join(', ');
   switch (session.phase) {
     case 'open': return 'Ask the person once about decisions and results still waiting from earlier sessions, then run "next".';
-    case 'evidence': return evidence.collectedAt ? 'The evidence is collected. The competitor analyst may add what rivals do; then run "next".' : 'Run "evidence --collect".';
+    case 'evidence': return evidence.collectedAt ? 'The evidence is collected. Start the competitor analyst and the horizon scan, at once; then run "next".' : 'Run "evidence --collect".';
     case 'track-record': return 'Check the ideas whose test date has passed, then run "next".';
-    case 'propose': return debateSpent(session) ? `The debate has used its agent runs, so no more proposers are started. ${waiting.length ? `Wait for ${names}, already started, then run "next"` : 'Run "next"'} with what was proposed.` : waiting.length ? `Start the proposers, all at once: ${names}.` : 'Everyone has proposed. Run "next" for the docket.';
+    case 'propose': {
+      const pass = passOf(session) === 2 ? 'second pass' : 'first pass';
+      if (debateSpent(session)) return `The debate has used its agent runs, so no more proposers are started. ${waiting.length ? `Wait for ${names}, already started, then run "next"` : 'Run "next"'} with what was proposed.`;
+      if (waiting.length) return `Proposals, ${pass}: start the proposers, all at once: ${names}.`;
+      return passOf(session) === 1 ? 'Everyone has proposed. Run "next" for the second pass, where each proposer sees the themes on the table and looks elsewhere.' : 'Both passes are done. Run "next" for the docket.';
+    }
     case 'docket': return record.docket ? 'The docket is saved. Run "next" to open the examination.' : 'Start the judge for the docket.';
     case 'examine': {
       if (debateSpent(session)) return `The debate has used its agent runs, so nobody more is started in it: a refusal for the budget is final and is not retried. ${waiting.length ? `Wait for ${names}, already started, then run "next"` : 'Run "next"'}: the judge rules on what is there.`;

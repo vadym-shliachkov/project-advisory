@@ -3,11 +3,12 @@ import path from 'node:path';
 import { SKILL_DIR } from './paths.mjs';
 
 // The two documents as HTML, printed to PDF by a browser. Everything an agent wrote is escaped; the only markup a
-// text may carry is **bold** and *italic*.
+// text may carry is **bold**, *italic* and a link to a web page, [words](https://…), which the save checks.
 
 const MAP = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
 export const esc = (value) => String(value ?? '').replace(/[&<>"']/g, (c) => MAP[c]);
 export const rich = (value) => esc(String(value ?? '').replace(/\s+/g, ' ').trim())
+  .replace(/\[([^\]\n]{1,160})\]\((https?:\/\/[^\s)]+)\)/g, '<a href="$2">$1</a>')
   .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
   .replace(/(^|[^*])\*([^*\s][^*]*)\*(?!\*)/g, '$1<em>$2</em>');
 
@@ -110,6 +111,8 @@ function countChips(model) {
     [c.proposed, 'proposed'], [c.admitted, 'debated'],
     [c.survived, 'survived', 'good'], [c.narrowed, 'survived smaller', 'good'],
     [c.killed, 'killed', 'bad'], [c.undecided, 'undecided', 'check'],
+    // How many ideas the judge found fresh: ones that could only come from this project, not from any adviser's list.
+    [typeof model.fresh === 'number' ? model.fresh : null, 'fresh', 'fresh'],
   ]);
 }
 
@@ -123,7 +126,7 @@ function methodSection(model, key = '') {
     ...(model.setSkipped ? ['The survivors were not looked at together, because that step failed.'] : []),
   ];
   return `<section class="method" id="method"><h2>Method and limits</h2>
-<p class="lead">Each idea was written as a hypothesis that can be proved wrong, attacked by a red team and by the other seats, answered by its proposer over at most three rounds, and ruled on by a judge who took no part and did not know who had said what.</p>
+<p class="lead">${model.ideas.some((i) => i.pass === 2) ? 'Before anyone proposed, one member looked at the rivals and another scanned what is changing around the business, outside its site. Ideas came in two passes: each seat alone first, then each seat saw the themes already on the table and brought one on ground none of them covered. ' : ''}Each idea was written as a hypothesis that can be proved wrong, attacked by a red team and by the other seats, answered by its proposer over at most three rounds, and ruled on by a judge who took no part and did not know who had said what.${typeof model.fresh === 'number' ? ' Before the debate the judge marked each idea fresh, when it could only come from looking at this project, or familiar, when any adviser would give it to any firm of this kind.' : ''}</p>
 <h4>What the session had to go on</h4>
 <p>${esc(model.evidenceCount)} pieces of evidence: ${esc(g.measured)} measured (a number from shared data), ${esc(g.observed)} observed (seen on the site, in the project or at a competitor), ${esc(g.argued)} argued. ${esc(model.session.runs)} of ${esc(model.session.budget)} agent runs were used.</p>
 ${limits.length ? `<h4>What it lacked</h4><ul class="limits">${limits.map((l) => `<li>${esc(l)}</li>`).join('')}</ul>` : ''}
@@ -145,7 +148,24 @@ const sourceLink = (s) => (isWeb(s) ? `<a href="${esc(s)}">${source(s)}</a>` : s
 const shortAddress = (url) => { try { const u = new URL(url); return `${u.hostname.replace(/^www\./, '')}${u.pathname === '/' ? '' : u.pathname}`; } catch { return url; } };
 const ideaLinks = (nums) => nums.map((n) => `<a href="#idea-${esc(n.id)}">idea ${n.no}</a>`).join(', ');
 
-function ideaArticle(model, idea, s, n, chapterNo, plain, picture) {
+// Where an idea applies: each place as a link the reader can open and, when it was photographed, the part of the page
+// with an outline around it. A place that could not be found says so under the top of its page.
+function whereBlock(places, { heading = true } = {}) {
+  if (!places.length) return '';
+  const item = (p) => {
+    const link = `<a href="${esc(p.url)}">${esc(shortAddress(p.url))}</a>`;
+    const caption = `${link} · ${esc(p.part)}${p.file ? `, seen ${esc(longDate(p.taken))}` : ''}${p.file && !p.found ? '. <span class="not-found">This part was not found on the page when it was photographed; the top of the page is shown.</span>' : ''}`;
+    return p.file
+      ? `<figure class="part${p.found ? '' : ' part-missing'}"><a href="${esc(p.url)}"><img src="${esc(p.file)}" alt="${esc(p.found ? `${p.part}, outlined, on ${shortAddress(p.url)}` : `The top of ${shortAddress(p.url)}`)}"></a><figcaption>${caption}</figcaption></figure>`
+      : `<p class="part-link">${caption}</p>`;
+  };
+  return `<div class="where">${heading ? '<h5>Where</h5>' : ''}${places.map(item).join('')}</div>`;
+}
+
+function ideaArticle(model, idea, s, n, chapterNo, plain, picture, parts = () => []) {
+  const places = parts(idea.thread);
+  // An idea with no picture yet still links its places.
+  const placesHtml = whereBlock(places.length ? places : (idea.where ?? []).map((w) => ({ ...w, file: null })));
   // A field whose table already labels it keeps its heading for screen readers only: two labels stacked read as noise.
   const field = (title, html, long = false, hidden = false) => (html ? `<div class="field${long ? ' field-long' : ''}"><h5${hidden ? ' class="sr"' : ''}>${esc(title)}</h5>${html}</div>` : '');
   const list = (items) => (items?.length ? `<ul>${items.map((x) => `<li>${rich(x)}</li>`).join('')}</ul>` : '');
@@ -153,7 +173,8 @@ function ideaArticle(model, idea, s, n, chapterNo, plain, picture) {
   const more = idea.proposerEvidence.length - shown.length;
   // At most two pictures, of the first pages the proposer cited that a member looked at.
   const seen = new Set();
-  const shots = idea.proposerEvidence.filter((e) => isWeb(e.source)).map((e) => ({ url: e.source, pic: picture(e.source) }))
+  // Only for an idea that names no place of its own: the places are the pictures that matter.
+  const shots = placesHtml ? [] : idea.proposerEvidence.filter((e) => isWeb(e.source)).map((e) => ({ url: e.source, pic: picture(e.source) }))
     .filter((x) => x.pic && !seen.has(x.pic.src) && seen.add(x.pic.src)).slice(0, 2);
   const figures = shots.length ? `<div class="shots${shots.length === 1 ? ' shots-one' : ''}">${shots.map(({ url, pic }) => `<figure class="shot"><a href="${esc(url)}"><img src="${esc(pic.src)}" alt="The first screen of ${esc(shortAddress(url))} on a desktop, as a member of the council saw it"></a><figcaption><a href="${esc(url)}">${esc(shortAddress(url))}</a>, seen ${esc(longDate(pic.taken))}</figcaption></figure>`).join('')}</div>` : '';
   const smaller = idea.verdict === 'narrowed' ? `<p class="smaller">A smaller form of the idea as it was proposed: “${esc(idea.originalTitle)}”.</p>` : '';
@@ -172,9 +193,10 @@ ${row('Fits with', s.fitsWith ? `<p>${rich(plain(s.fitsWith))}</p>` : '')}
   const where = [`Proposed from the seat of ${esc(idea.proposer.title.replace(/^The /, 'the '))}`, chapterNo ? `debated in chapter ${roman(chapterNo)} of the discussion` : '', `idea ${esc(idea.id.slice(1))} in the ledger`].filter(Boolean).join(' · ');
   return `<article class="idea" id="idea-${esc(idea.id)}">
 <header class="idea-head"><p class="idea-no">${n}</p><div><h3>${esc(plain(idea.title))}</h3>
-<p class="tags">${idea.scale ? tag(idea.scale, `scale-${idea.scale}`) : ''}${tag(`${idea.strength} support`, idea.strength)}${tag(`${idea.effort} effort`)}</p></div></header>
+<p class="tags">${idea.scale ? tag(idea.scale, `scale-${idea.scale}`) : ''}${idea.novelty === 'fresh' ? tag('fresh', 'fresh') : ''}${tag(`${idea.strength} support`, idea.strength)}${tag(`${idea.effort} effort`)}</p></div></header>
 <p class="lede">${rich(s.sentence)}</p>
 ${smaller}
+${placesHtml}
 ${box}
 <h4 class="case">The case for it</h4>
 ${field('Why it should work', `<p>${rich(s.why)}</p>`)}
@@ -187,7 +209,7 @@ ${field('Why not leave things as they are', `<p>${rich(plain(idea.ruling.vsDoNot
 </article>`;
 }
 
-export function buildSuggestionsHtml({ model, suggestions, discussion = null, picture = () => null }) {
+export function buildSuggestionsHtml({ model, suggestions, discussion = null, picture = () => null, parts = () => [] }) {
   const chapterNo = (thread) => { const at = (discussion?.chapters ?? []).findIndex((c) => c.thread === thread); return at >= 0 ? at + 1 : null; };
   const written = new Map(suggestions.survivors.map((s) => [s.idea, s]));
   const lived = model.survivors.length;
@@ -236,8 +258,27 @@ ${questions.length ? `<p class="ask-more">${asks.length ? 'And there' : 'There'}
 ${tried ? `<h3>Results since the earlier sessions</h3><p>Of the ${esc(r.survived)} ideas that survived earlier sessions, ${esc(r.worked)} worked, ${esc(r.failed)} failed and ${esc(r.inconclusive)} could not be told; ${esc(r.testing)} are being tested.</p>` : ''}
 </section>`;
 
+  // The survivors in two groups: what the business could start or remake, then what improves what is there. A reader who
+  // wants new ideas finds them first and sees at once how many there are.
+  const article = (idea, i) => ideaArticle(model, idea, written.get(idea.id), i + 1, chapterNo(idea.thread), plain, picture, parts);
+  const isBold = (idea) => ['new', 'direction'].includes(idea.scale);
+  const groups = scaled ? [
+    ['New directions', 'Things the business does not do yet, and remakes of what it has. Each is a decision for you; its test is a first step.', model.survivors.map((idea, i) => [idea, i]).filter(([idea]) => isBold(idea))],
+    ['Improvements to what is there', 'Changes to the site and the profiles as they are.', model.survivors.map((idea, i) => [idea, i]).filter(([idea]) => !isBold(idea))],
+  ].filter(([, , list]) => list.length) : [[null, null, model.survivors.map((idea, i) => [idea, i])]];
   const ideas = lived ? `<section class="ideas"><h2 class="sr">The ideas that survived</h2>
-${model.survivors.map((idea, i) => ideaArticle(model, idea, written.get(idea.id), i + 1, chapterNo(idea.thread), plain, picture)).join('\n')}
+${groups.map(([title, lead, list]) => `${title ? `<h2 class="group">${esc(title)}</h2><p class="lead group-lead">${esc(lead)}</p>` : ''}${list.map(([idea, i]) => article(idea, i)).join('\n')}`).join('\n')}
+</section>` : '';
+
+  // The bold ideas that did not survive, with what would make each worth trying: the debate killed them on what could be
+  // shown today, which is not the same as showing they are wrong.
+  const betText = new Map((suggestions.bets ?? []).map((b) => [b.idea, b]));
+  const bets = (model.bets ?? []).length ? `<section class="bets"><h2>Bold ideas the council could not prove</h2>
+<p class="lead">${(model.bets ?? []).length === 1 ? 'This idea reaches' : 'These ideas reach'} beyond what the business does today and did not survive the debate. A bet often falls for want of evidence that only trying it would give, so each is shown with what would make it worth trying.</p>
+${(model.bets ?? []).map((i) => { const b = betText.get(i.id); const places = parts(i.thread); return `<div class="bet"><p class="bet-head"><b>${esc(plain(i.title))}</b> ${tag(i.scale, `scale-${i.scale}`)}${i.novelty === 'fresh' ? tag('fresh', 'fresh') : ''} ${stamp(i.verdict)}</p>
+${b ? `<p>${rich(b.sentence)}</p>` : `<p>${rich(plain(i.hypothesis.change))}</p>`}
+<dl class="decide">${b ? `<div><dt>Worth trying if</dt><dd><p>${rich(b.worthIt)}</p></dd></div>` : ''}<div><dt>${i.verdict === 'killed' ? 'Why it fell' : 'What would decide it'}</dt><dd><p>${rich(plain(i.verdict === 'killed' ? i.ruling.causeOfDeath : i.ruling.wouldDecide))}</p></dd></div></dl>
+${places.length ? whereBlock(places) : ''}</div>`; }).join('\n')}
 </section>` : '';
 
   const KIND = { conflict: 'Conflict', 'shared-assumption': 'Shared assumption', order: 'Order', other: 'Note' };
@@ -248,17 +289,18 @@ ${model.setNotes.map((n) => `<div class="set-note"><p class="set-head">${tag(KIN
 ${model.setChanges.length ? `<p class="meta">On these notes the judge looked again at ${model.setChanges.length === 1 ? 'one verdict' : `${model.setChanges.length} verdicts`}; the verdicts shown in this document are the final ones.</p>` : ''}
 </section>` : '';
 
-  const both = model.undecided.length && questions.length;
-  const openTitle = both ? 'Undecided, and questions for you' : model.undecided.length ? 'Undecided ideas' : 'Questions for you';
-  const open = model.undecided.length || questions.length ? `<section class="open" id="questions"><h2>${openTitle}</h2>
-${model.undecided.length ? `${both ? '<h3>Undecided ideas</h3>' : ''}${table('undecided', ['Idea', 'What would decide it'], model.undecided.map((i) => `<tr><td><b>${esc(plain(i.title))}</b></td><td>${rich(plain(i.ruling.wouldDecide))}</td></tr>`))}` : ''}
+  // An idea shown among the bold ones is not listed again below.
+  const undecided = model.undecided.filter((i) => !(model.bets ?? []).includes(i));
+  const killed = model.killed.filter((i) => !(model.bets ?? []).includes(i));
+  const both = undecided.length && questions.length;
+  const openTitle = both ? 'Undecided, and questions for you' : undecided.length ? 'Undecided ideas' : 'Questions for you';
+  const open = undecided.length || questions.length ? `<section class="open" id="questions"><h2>${openTitle}</h2>
+${undecided.length ? `${both ? '<h3>Undecided ideas</h3>' : ''}${table('undecided', ['Idea', 'What would decide it'], undecided.map((i) => `<tr><td><b>${esc(plain(i.title))}</b></td><td>${rich(plain(i.ruling.wouldDecide))}</td></tr>`))}` : ''}
 ${questions.length ? `${both ? '<h3>Questions only you can answer</h3>' : ''}<p class="lead">Nobody in the session could answer these. An answer lets the next session take the idea up again.</p><ol class="questions">${questions.map((q) => `<li>${rich(q.text)}</li>`).join('')}</ol>` : ''}
 </section>` : '';
 
-  // A bold idea that died is still worth seeing: its scale stands under its title.
-  const bold = (i) => (['new', 'direction'].includes(i.scale) ? `<span class="sub">${tag(i.scale, `scale-${i.scale}`)}</span>` : '');
-  const graveyard = model.killed.length || model.refused.length || model.merged.length ? `<section class="graveyard"><h2>The graveyard</h2>
-${model.killed.length ? table('killed', ['Idea', 'Cause of death'], model.killed.map((i) => `<tr><td><b>${esc(plain(i.title))}</b>${bold(i)}</td><td>${rich(plain(i.ruling.causeOfDeath))}</td></tr>`)) : ''}
+  const graveyard = killed.length || model.refused.length || model.merged.length ? `<section class="graveyard"><h2>The graveyard</h2>
+${killed.length ? table('killed', ['Idea', 'Cause of death'], killed.map((i) => `<tr><td><b>${esc(plain(i.title))}</b></td><td>${rich(plain(i.ruling.causeOfDeath))}</td></tr>`)) : ''}
 ${model.refused.length ? `<h3>Turned away before the debate</h3>${table('refused', ['Idea', 'Why'], model.refused.map((x) => `<tr><td><b>${esc(x.title)}</b></td><td>${rich(x.reason)}</td></tr>`))}` : ''}
 ${model.merged.length ? `<h3>Merged into another idea</h3>${table('merged', ['Idea', 'Debated as'], model.merged.map((x) => `<tr><td>${esc(x.title)}</td><td>${esc(x.into)}</td></tr>`))}` : ''}
 </section>` : '';
@@ -269,12 +311,12 @@ ${model.merged.length ? `<h3>Merged into another idea</h3>${table('merged', ['Id
 <table class="key"><thead class="sr"><tr><th scope="col">Scale</th><th scope="col">What it means</th></tr></thead><tbody>${Object.entries(SCALE_NOTE).map(([k, v]) => `<tr><td>${tag(k, `scale-${k}`)}</td><td>${esc(v)}</td></tr>`).join('')}</tbody></table>
 <p class="key-line">Effort is ${Object.entries(EFFORT_NOTE).map(([k, v]) => `<b>${esc(k)}</b> (${esc(v.replace(/\.$/, '').toLowerCase())})`).join(', ')}.</p>`;
 
-  return page({ title: 'Council · Suggestions', kind: 'suggestions', model, body: [glance, decisions, ideas, set, open, graveyard, methodSection(model, key)].join('\n') });
+  return page({ title: 'Council · Suggestions', kind: 'suggestions', model, body: [glance, decisions, ideas, set, bets, open, graveyard, methodSection(model, key)].join('\n') });
 }
 
 // ---- The discussion ----
 
-function chapterHtml(model, chapter, n, usedEvidence, plain) {
+function chapterHtml(model, chapter, n, usedEvidence, plain, placesOf = () => []) {
   const idea = model.ideas.find((i) => i.thread === chapter.thread);
   // The seat stands beside the name: the reader should not have to remember who speaks for what.
   const speaker = (role) => { const s = model.cast.find((x) => x.role === role); return s ? `${esc(s.name)}<span class="seat">, ${esc(s.title)}</span>` : esc(role); };
@@ -304,17 +346,18 @@ function chapterHtml(model, chapter, n, usedEvidence, plain) {
 <header class="chapter-head"><p class="chapter-no">Chapter ${roman(n)}</p><h3>${esc(idea.originalTitle)}</h3>
 <p class="chapter-by">Proposed by ${seatLine(idea.proposer)} ${stamp(ruling.verdict)}</p></header>
 <blockquote class="pull">${rich(chapter.pullQuote)}</blockquote>
+${whereBlock(placesOf(idea.thread).length ? placesOf(idea.thread) : (idea.where ?? []).map((w) => ({ ...w, file: null })), { heading: false })}
 ${scenes}
 <div class="ruling ruling-${esc(ruling.verdict)}"><p class="ruling-head">The ruling ${stamp(ruling.verdict)}</p>${detail}</div>
 </article>`;
 }
 
-export function buildDiscussionHtml({ model, discussion }) {
+export function buildDiscussionHtml({ model, discussion, parts = () => [] }) {
   const usedEvidence = new Set();
   const ordered = discussion.chapters.filter((c) => model.ideas.some((i) => i.thread === c.thread));
   // In the minutes an idea is "chapter IV": short enough to stand inside a sentence, and the reader can turn to it.
   const plain = (text) => readerText(text, (id) => { const at = ordered.findIndex((c) => c.thread === id); return at >= 0 ? `chapter ${roman(at + 1)}` : null; });
-  const chapters = ordered.map((c, i) => chapterHtml(model, c, i + 1, usedEvidence, plain)).join('\n');
+  const chapters = ordered.map((c, i) => chapterHtml(model, c, i + 1, usedEvidence, plain, parts)).join('\n');
   const ideaOf = (thread) => model.ideas.find((i) => i.thread === thread);
   const present = model.cast.map((s) => `<tr><td><b>${esc(s.name)}</b></td><td>${esc(s.title)}</td><td>${esc(s.temper ?? '')}</td></tr>`);
 

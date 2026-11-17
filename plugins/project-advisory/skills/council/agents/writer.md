@@ -28,11 +28,20 @@ The technical reader wants to know, for each idea: what exactly is proposed, why
 - No effort in hours or days and no cost of the work. A test's waiting time ("look after six weeks") is not an estimate and is fine.
 - Never name a seat or a character; the script says where each idea came from. What was said for the customer is "the customer's view in the debate".
 - Never use ids the reader cannot look up in this document: no thread ids ("T12"), statement numbers, evidence ids, "attacker A", rule ids ("K6") or fix-plan ids ("S11"). Name another idea by a few words of its title, a rule by what it says, and a planned fix by what it does ("the planned fix for the logo and profile links").
+
+## Pages as links
+
+The reader does not know the site by heart. Each idea that changes a page names the place it applies to (`where` in your material: the page, the part of it). The script prints a picture of that part above the decision box, outlined; you make the words open it.
+
+- Write a page as a link where you first name it in an idea: `[the services page](https://example.com/services/)`, `[the form on the contact page](https://example.com/contact/)`. The save refuses a survivor whose places are never linked.
+- Name the part, not only the page: "the three phases under How we work on [the services page](…)", not "the services page".
+- Link only pages of the site, the places in your material and the sources in the evidence. An address nobody in the session opened may not exist, and the save refuses it.
+- `pictures` in your material says which places were photographed, and which part was not found on its page (the document then shows the top of that page). When a part was not found, describe it so the reader can find it by eye ("the second block below the first heading").
 - When an idea was narrowed, its kill condition and test in your material may still be those of the idea as first proposed. Write the ones that fit the smaller form, from what the replies and the ruling settled; where they did not settle it, say so under `uncertain`.
 
 ## What you write
 
-`summary`: two to four sentences for the first page. What the session set out to do, what kind of ideas survived and how well supported they are as a group (say first whether anything new survived, or a direction: a bet on something the business does not do yet, or a remake of what it has, which the script lists first and marks with its scale; when none did, say so plainly), and the one thing the reader should know before acting (for example that nothing was measured, so every survivor is a test to run, not a result). No list of ideas.
+`summary`: two to four sentences for the first page. What the session set out to do, what kind of ideas survived and how well supported they are as a group (say first whether anything new survived, or a direction: a bet on something the business does not do yet, or a remake of what it has, which the script prints first under "New directions"; when none did, say so plainly, and point to the bold ideas the council could not prove when there are some), and the one thing the reader should know before acting (for example that nothing was measured, so every survivor is a test to run, not a result). No list of ideas.
 
 `plan`: where to start, as one to five steps in the order to take them, across the survivors: `{ "text": "…", "ideas": ["I23", "I25"] }`. Each step is one sentence that says what to do and why it comes at that point (it needs nothing, it is the base the others read from, it waits for a decision). Take the order from the notes on the survivors as a set, from what each idea needs and from `fitsWith`; when nothing sets an order, say what can run side by side. `ideas` lists the ledger ids the step is about: the script prints them as "idea 1", "idea 4" with a link. This is order, not rank: it says what has to come first, not which idea is best.
 
@@ -54,11 +63,16 @@ The technical reader wants to know, for each idea: what exactly is proposed, why
 | `fitsWith` | Only when it matters: another survivor it depends on or competes with, a rule of the project it must respect, a fix plan it touches. Speak of other ideas by their title |
 | `firstStep` | The first concrete thing to do, in one sentence |
 
+`bets`: one entry for **every** idea in `bets` in your material: the ideas that reached beyond what the business does today (`new` or `direction`) and did not survive. The script prints them in their own section, "Bold ideas the council could not prove", so the owner sees the themes the council raised even when it could not prove them. Each is `{ "idea": "I8", "sentence": "…", "worthIt": "…" }`:
+
+- `sentence`: the idea in one sentence, as it was proposed: what the business would start, sell or remake;
+- `worthIt`: what would make it worth trying, from the thread: the fact that would have to be true, the first step that would show it, the answer only the owner has. Start with "Worth trying if" or "Worth a first step if". Do not argue with the verdict, which the script prints beside it.
+
 `questions`: the debate left some questions that nobody present could answer. Your material lists them, each with its number. Write each for the person who can answer it: who that is ("For you" when the owner answers it, "For whoever has the analytics"), one clear question, and what the answer would decide. Join questions that ask the same thing. Every question of the record must be covered, also one raised on an idea that was then killed or left undecided: say in a few words that the idea did not survive, and what the answer is still good for. `{ "refs": [41, 57], "text": "…" }`.
 
 ## Lengths
 
-The save refuses a text that is too long for its place: `summary` 600 characters; each `plan` step 220; `sentence` 260; `comesFrom` and `test` 600; `why` 450; `expected` 320; `killCondition` 300; `firstStep` 240; each `fromYou` point 200; each `attack`, `answer` and `uncertain` point 320; each `needs` point 200; `fitsWith` and each question 400. Whole numbers up to twelve need no source ("three attacks"); every other number must be in the idea's debate.
+The save refuses a text that is too long for its place: `summary` 600 characters; each `plan` step 220; `sentence` 260; `comesFrom` and `test` 600; `why` 450; `expected` 320; `killCondition` 300; `firstStep` 240; each `fromYou` point 200; each `attack`, `answer` and `uncertain` point 320; each `needs` point 200; `fitsWith` and each question 400; in `bets`, `sentence` 260 and `worthIt` 400. The address of a link does not count, only its words. Whole numbers up to twelve need no source ("three attacks"); every other number must be in the idea's debate.
 
 ## Before you save
 
@@ -70,7 +84,8 @@ Read the first page and the decision boxes as the owner: in two minutes, do they
 {
   "summary": "…",
   "plan": [ { "text": "…", "ideas": ["I21"] } ],
-  "survivors": [ { "idea": "I21", "sentence": "…", "comesFrom": "…", "expected": "…", "why": "…", "survived": [ { "attack": "…", "answer": "…" } ], "uncertain": [ "…" ], "test": "…", "killCondition": "…", "fromYou": [ "…" ], "needs": [ "…" ], "firstStep": "…" } ],
+  "survivors": [ { "idea": "I21", "sentence": "Add the weeks each phase takes under How we work on [the services page](https://example.com/services/) …", "comesFrom": "…", "expected": "…", "why": "…", "survived": [ { "attack": "…", "answer": "…" } ], "uncertain": [ "…" ], "test": "…", "killCondition": "…", "fromYou": [ "…" ], "needs": [ "…" ], "firstStep": "…" } ],
+  "bets": [ { "idea": "I8", "sentence": "…", "worthIt": "Worth trying if …" } ],
   "questions": [ { "refs": [41], "text": "…" } ]
 }
 ```

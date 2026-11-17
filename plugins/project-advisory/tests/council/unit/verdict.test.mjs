@@ -38,7 +38,8 @@ function atVerdict() {
   for (let n = 0; n < 3; n++) ok(advance(ctx));
   proposers(session).forEach((role, n) => ok(say(ctx, role, [hyp(n + 1, [['E1'], ['E2'], ['E3'], [], [], []][n])])));
   ok(advance(ctx));
-  ctx.ideas = ok(saveDocket(ctx, { admitted: ctx.record.threads.map((t) => ({ thread: t.id })) }, { ideas: [], date: '2026-11-15' })).ideas;
+  ok(advance(ctx, { force: true }));
+  ctx.ideas = ok(saveDocket(ctx, { admitted: ctx.record.threads.map((t) => ({ thread: t.id, novelty: 'familiar' })) }, { ideas: [], date: '2026-11-15' })).ideas;
   ok(advance(ctx));
   ok(advance(ctx, { force: true }));
   assert.equal(session.phase, 'verdict');
@@ -214,7 +215,8 @@ test('the commands carry a session from the verdict to final verdicts in the led
   assert.equal(status({ root }).phase, 'propose');
   ['client', 'search', 'content', 'conversion', 'competitors', 'outsider'].forEach((role, n) => assert.equal(sayCommand({ root, role }, stdin({ statements: [hyp(n + 1)] })).ok, true));
   next({ root });
-  assert.equal(verdict({ root, stage: 'docket' }, stdin({ admitted: [1, 2, 3, 4, 5, 6].map((n) => ({ thread: `T${n}` })) })).ok, true);
+  next({ root, force: true });
+  assert.equal(verdict({ root, stage: 'docket' }, stdin({ admitted: [1, 2, 3, 4, 5, 6].map((n) => ({ thread: `T${n}`, novelty: 'familiar' })) })).ok, true);
   next({ root });
   assert.equal(next({ root, force: true }).to.phase, 'verdict');
 

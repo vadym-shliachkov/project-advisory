@@ -48,6 +48,23 @@
     },
     "effort": { "type": "string", "enum": ["small", "medium", "large"] },
     "scale": { "type": "string", "enum": ["adjustment", "addition", "direction", "new"], "description": "How far the idea reaches: a change to what is there, something new beside it, a remake of what is there, or something the business does not do or have at all" },
+    "novelty": { "type": "string", "enum": ["fresh", "familiar"], "description": "The judge's word at the docket: fresh when it could only come from looking at this project and its market, familiar when any adviser would give it to any firm of this kind" },
+    "where": {
+      "type": "array",
+      "maxItems": 3,
+      "description": "The places the idea applies to, so a reader can see them",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["url", "part"],
+        "properties": {
+          "url": { "type": "string", "pattern": "^https?://" },
+          "part": { "type": "string", "minLength": 5, "description": "The part of the page, in plain words" },
+          "text": { "type": "string", "minLength": 3, "description": "Words shown in that part, to find it" },
+          "selector": { "type": "string", "minLength": 1, "description": "A CSS selector for that part" }
+        }
+      }
+    },
     "test": {
       "type": "object",
       "additionalProperties": false,

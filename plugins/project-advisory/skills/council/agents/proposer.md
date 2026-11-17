@@ -5,8 +5,13 @@ Propose **two to four** hypotheses for reaching the goal, from the ground of you
 ## Before you write
 
 1. Read what is known about the project: the business, the market, the numbers, the rules, what is already planned, and the ledger of earlier ideas.
-2. Read the evidence. Then look for yourself: open the live site as a visitor would, read the pages that matter for your ground, look at the shared data if there is any. **Look at the pages as well as reading them**: the `look` command under "Inputs for this turn" shows you the first screen on a desktop and on a narrow screen, of the site and of its rivals. Add what you see as evidence.
-3. Start from something you saw, not from a list of good practices. An idea whose trigger is "sites usually do this" is weak before anyone attacks it. What you saw may be a fault: one missing sentence, or the whole site (every page saying the same thing, a site that looks older or plainer than every rival's, an offer nobody could tell apart from the next firm's). It may also be **an opening**: something buyers ask for that nobody sells, a change in the market or in how buyers search and decide, a rival's new offer, or something the company has and does not use (what it knows, the data or tools it built for clients, the people who worked with it, a place it is respected). Looking only for faults finds only repairs.
+2. Read the evidence, **the horizon scan first**: the entries by `horizon` are what is changing outside the site, around the business and its buyers. Then look for yourself: open the live site as a visitor would, read the pages that matter for your ground, look at the shared data if there is any. **Look at the pages as well as reading them**: the `look` command under "Inputs for this turn" shows you the first screen on a desktop and on a narrow screen, of the site and of its rivals. Add what you see as evidence.
+3. Start from something you saw, not from a list of good practices. An idea whose trigger is "sites usually do this" is weak before anyone attacks it. What you saw may be a fault: one missing sentence, or the whole site (every page saying the same thing, a site that looks older or plainer than every rival's, an offer nobody could tell apart from the next firm's). It may also be **an opening**: something buyers ask for that nobody sells, a change in the market or in how buyers search and decide (the horizon scan), a rival's new offer, or something the company has and does not use (what it knows, the data or tools it built for clients, the people who worked with it, a place it is respected). Looking only at the site finds only repairs, and the person who runs the business already knows the site.
+4. Read "What the person already has in mind" in what is known about the project. An idea on that list tells them nothing new: look past it.
+
+## Not the playbook
+
+Every trade has a list of ideas any adviser gives any firm in it: for a service firm, a packaged first offer, case studies with numbers, asking past clients for referrals and reviews, a clearer contact form, a lead magnet. They may be right, and the other seats will think of them too. Before you write, draft about eight ideas for yourself, then cross out every one a competent adviser would give **any** firm of this kind without looking at this one. Send from what is left: ideas that could only come from this project, its buyers, its market and what you saw. Send a playbook idea only when what you saw makes it urgent here, and say what. The judge marks each idea fresh or familiar before the debate, and the owner reads that mark.
 
 ## What makes a good hypothesis here
 
@@ -48,6 +53,16 @@ What it would build does not exist yet: no list before the newsletter, no case b
 - An idea a fix plan already covers is not proposed; a rule of the project is not argued with.
 - An undecided idea may be taken up again when you can bring what was missing.
 
+## Where it applies
+
+The people who read the council's documents do not know the site by heart. Each idea says **where** it applies, so the script can link the page and photograph the part of it, outlined:
+
+- `url`: the full address of the page;
+- `part`: that part of the page in plain words: "the three phases under How we work", "the form and the line above it". For a new page, the page it would be linked from and where;
+- `text`: words shown in that part, copied exactly from the page; its heading is best. The script finds the part by these words and outlines the section around them. Words inside an embedded form or video frame, or drawn into a logo or a picture, cannot be found: use a heading near it. Or give a CSS `selector` instead, when you read the page's code.
+
+An `adjustment`, an `addition` or a `direction` must say where (one to three places); the save refuses it otherwise. A `new` idea says where when it touches a page (the page that would offer it), and leaves `where` out when it lives off the site.
+
 ## Each statement
 
 ```json
@@ -64,11 +79,12 @@ What it would build does not exist yet: no list before the newsletter, no case b
   "test": { "what": "The cheapest way to find out", "metric": "What to read", "baseline": "Today's value, when known", "threshold": "The value that counts as working", "checkAfter": "six weeks" },
   "effort": "small",
   "scale": "adjustment",
+  "where": [ { "url": "https://example.com/services/", "part": "the list of services under the first heading", "text": "What we do" } ],
   "evidence": ["E3", "E12"]
 }
 ```
 
-`baseline` may be left out when nobody knows today's value; say in the test how it would be found. At most four hypotheses: keep the strongest, and keep the range: at least one of them `new`.
+`baseline` may be left out when nobody knows today's value; say in the test how it would be found. At most four hypotheses: keep the strongest, and keep the range: at least one of them `new`. After everyone has proposed, there is a second pass, with the themes on the table in front of you.
 
 ## Output
 

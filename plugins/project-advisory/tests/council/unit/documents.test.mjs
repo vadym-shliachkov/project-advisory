@@ -49,7 +49,8 @@ function debated() {
   say({ root, role: 'content' }, stdin({ statements: [hyp(3)] }));
   for (const role of ['conversion', 'competitors', 'outsider']) say({ root, role }, stdin({ statements: [] }));
   next(o);
-  verdict({ root, stage: 'docket' }, stdin({ admitted: [{ thread: 'T1' }, { thread: 'T2' }, { thread: 'T3' }] }));
+  next({ ...o, force: true });
+  verdict({ root, stage: 'docket' }, stdin({ admitted: [{ thread: 'T1', novelty: 'familiar' }, { thread: 'T2', novelty: 'familiar' }, { thread: 'T3', novelty: 'familiar' }] }));
   next(o);
   say({ root, role: 'red-team' }, stdin({ statements: [
     { type: 'steelman', thread: 'T2', text: `In its strongest form the idea says that proof brings enquiries, ${LONG}` },
@@ -85,7 +86,7 @@ const survivor = (idea, extra = {}) => ({
   killCondition: 'No change in contact-page visits after six weeks.', firstStep: 'Pick the client whose results may be published.',
   fromYou: ['Decide which client may be named on the page.'], ...extra,
 });
-const goodSuggestions = () => ({ summary: 'The session looked for ways to bring more enquiries. Two ideas survived, neither on a measured number, so each is a test to run and not a result.', plan: [{ text: 'Start with the case study: it needs nothing but a yes from the client.', ideas: ['I2'] }, { text: 'Then the second idea, read against the first.', ideas: ['I4'] }], survivors: [survivor('I2'), survivor('I4')], questions: [] });
+const goodSuggestions = () => ({ summary: 'The session looked for ways to bring more enquiries. Two ideas survived, neither on a measured number, so each is a test to run and not a result.', plan: [{ text: 'Start with the case study: it needs nothing but a yes from the client.', ideas: ['I2'] }, { text: 'Then the second idea, read against the first.', ideas: ['I4'] }], survivors: [survivor('I2'), survivor('I4')], bets: [{ idea: 'I1', sentence: 'Publish the first case study as a product of its own, sold apart from the site work.', worthIt: 'Worth trying if one client agrees to be named and the next five enquirers are asked about it.' }], questions: [] });
 
 function chapters(d) {
   const speech = (speaker, refs, text) => ({ speaker, refs, text: `${text}, ${LONG}` });
@@ -314,7 +315,7 @@ test('both documents are written as HTML from the record: verdicts by the script
   assert.ok(talk.includes('<span class="seat">, The red team</span>'), 'a speaker is named with the seat');
 
   const report = fs.readFileSync(path.join(d.dir, 'suggestions.html'), 'utf8');
-  for (const part of ['Council · Suggestions', 'Make potential clients see clearly what the business offers and why to choose it, on the site and beyond it, so that more of them get in touch', '<b>2</b> debated'.replace('2', '3'), '<b>1</b> killed', 'tag-fair">fair support', 'tag-speculative">speculative support', 'tag-scale-new">new', 'How far an idea reaches', 'New things first, then remakes', 'A smaller form of the idea as it was proposed: “Idea 3: a case study on the services page”', '<h2>Where to start</h2>', 'href="#idea-I2">idea 1</a>', '<h2>Your decisions</h2>', '<h3>What we need from you</h3>', 'Decide which client may be named on the page.', '<dt>First step</dt>', '<dt>Needs from you</dt>', '<dt>Drop it if</dt>', '<h4 class="case">The case for it</h4>', 'Proposed from the seat of Search and AI answers', 'debated in chapter II of the discussion', 'The survivors as a set', 'tag-order">Order', 'The graveyard', 'Method and limits', 'No data was shared']) assert.ok(report.includes(part), part);
+  for (const part of ['Council · Suggestions', 'Make potential clients see clearly what the business offers and why to choose it, on the site and beyond it, so that more of them get in touch', '<b>2</b> debated'.replace('2', '3'), '<b>1</b> killed', 'tag-fair">fair support', 'tag-speculative">speculative support', 'tag-scale-new">new', 'How far an idea reaches', 'New things first, then remakes', '<h2 class="group">New directions</h2>', 'A smaller form of the idea as it was proposed: “Idea 3: a case study on the services page”', '<h2>Where to start</h2>', 'href="#idea-I2">idea 1</a>', '<h2>Your decisions</h2>', '<h3>What we need from you</h3>', 'Decide which client may be named on the page.', '<dt>First step</dt>', '<dt>Needs from you</dt>', '<dt>Drop it if</dt>', '<h4 class="case">The case for it</h4>', 'Proposed from the seat of Search and AI answers', 'debated in chapter II of the discussion', 'The survivors as a set', 'tag-order">Order', 'Bold ideas the council could not prove', 'Worth trying if', 'Method and limits', 'No data was shared']) assert.ok(report.includes(part), part);
   // The owner is asked the decision the next session runs on, with the council's advice and a place to mark it.
   for (const part of ['<b>What you decide:</b> for each idea, <b>yes</b> (test it), <b>later</b>, or <b>no</b> with a reason', 'The council advises yes for each', '<th scope="col">Your answer</th>', '<i class="box" aria-hidden="true"></i>Later']) assert.ok(report.includes(part), part);
   assert.ok(report.indexOf('What you decide:') < report.indexOf('<h3>What we need from you</h3>'), 'the decision is asked before the side questions');

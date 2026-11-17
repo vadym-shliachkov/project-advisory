@@ -43,7 +43,8 @@ function examining() {
   move(ctx); move(ctx); move(ctx);
   proposers(session).forEach((role, n) => ok(say(ctx, role, [hyp(n + 1)])));
   move(ctx);
-  ctx.ideas = ok(saveDocket(ctx, { admitted: ctx.record.threads.map((t) => ({ thread: t.id })) }, { ideas: [], date: '2026-11-15' })).ideas;
+  move(ctx, { force: true });
+  ctx.ideas = ok(saveDocket(ctx, { admitted: ctx.record.threads.map((t) => ({ thread: t.id, novelty: 'familiar' })) }, { ideas: [], date: '2026-11-15' })).ideas;
   move(ctx);
   assert.deepEqual([session.phase, session.round, session.step], ['examine', 1, 'attack']);
   assert.equal(thread(ctx.record, 'T2').by, 'search');

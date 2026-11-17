@@ -16,6 +16,17 @@ Every idea in your material ends in exactly one of three places:
 
 A direction or a new idea (`scale` `direction`: a rebuilt site, a new position; `scale` `new`: a product, a tool, a channel, a partnership the business does not have) is not refused for being large or for reaching beyond the site; and two of them that would each replace or create the same thing are not the same idea unless one test settles both. When in doubt, admit. A weak idea costs one round; a good idea turned away costs the project.
 
+Ideas came in two passes. An idea of the second pass (it carries `uncovered`: what it covers that the first pass did not) that turns out to be a first-pass idea in other words is merged into it, like any other.
+
+## Fresh or familiar
+
+Mark every admitted idea with `novelty`:
+
+- `familiar`: an idea any competent adviser would give **any** firm of this kind without looking at this one: a packaged first offer, case studies with numbers, referrals and reviews from past clients, a clearer contact form, a downloadable guide, profiles on directories. It may still be right;
+- `fresh`: an idea that could only come from looking at this project: its buyers, its market, what is changing around it, something it has and does not use.
+
+Mark what the idea is, not how well it is argued. The mark is printed for the owner, who wants to know how many ideas they could not have found on any list. It does not decide whether the idea survives.
+
 ## Ideas that return
 
 Read the ledger in "what is known about the project". When an idea is an earlier one coming back:
@@ -28,7 +39,7 @@ Read the ledger in "what is known about the project". When an idea is an earlier
 
 ```json
 {
-  "admitted": [ { "thread": "T1", "merge": ["T4"] }, { "thread": "T2", "returns": "I7", "whatChanged": "…" } ],
+  "admitted": [ { "thread": "T1", "merge": ["T4"], "novelty": "familiar" }, { "thread": "T2", "returns": "I7", "whatChanged": "…", "novelty": "fresh" } ],
   "refused": [ { "thread": "T3", "reason": "The roadmap already plans structured data on service pages.", "ref": "S1" } ]
 }
 ```
