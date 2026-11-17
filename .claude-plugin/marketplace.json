@@ -1,16 +1,14 @@
 {
-  "name": "project-health",
-  "owner": { "name": "Vadym Shliachkov" },
+  "name": "project-advisory",
+  "owner": {
+    "name": "Vadym Shliachkov"
+  },
+  "description": "Health check, implementation roadmap and growth council for web projects.",
   "plugins": [
     {
-      "name": "project-health",
-      "source": "./plugins/project-health",
-      "description": "Analyse a web project's health and produce a checklist, a branded PDF report and an optional outcome backlog."
-    },
-    {
-      "name": "council",
-      "source": "./plugins/council",
-      "description": "A weekly council of role agents that proposes ideas for growing a project, tries to kill them, and reports the ones that survive."
+      "name": "project-advisory",
+      "source": "./plugins/project-advisory",
+      "description": "Advice for a web project: a health check with a branded PDF report, an implementation roadmap, and a weekly council that proposes and stress-tests ideas for growth."
     }
   ]
 }

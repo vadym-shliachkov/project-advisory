@@ -1,0 +1,8 @@
+{
+  "name": "project-advisory",
+  "version": "0.2.0",
+  "description": "Advice for a web project: a health check with a branded PDF report, an implementation roadmap, and a weekly council that proposes and stress-tests ideas for growth.",
+  "author": { "name": "Vadym Shliachkov" },
+  "license": "MIT",
+  "keywords": ["audit", "seo", "performance", "security", "health-check", "roadmap", "strategy", "growth", "red-team"]
+}

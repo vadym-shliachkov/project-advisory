@@ -1,6 +1,18 @@
-# project-health
+# project-advisory
 
-A Claude Code and Codex plugin that analyses the health of a web project and produces:
+A Claude Code and Codex plugin with three skills for a web project, all under one name:
+
+| Command | What it does |
+|---|---|
+| `/project-advisory:project-health` | Health check of the project, with a checklist, a PDF report and a plan. |
+| `/project-advisory:roadmap` | Implementation roadmap agreed with the person who runs the project. |
+| `/project-advisory:council` | Weekly council of role agents that proposes ideas for growth and tries to kill them. |
+
+No skill ever submits a form or contacts a real company or person.
+
+## project-health
+
+Analyses the health of a web project and produces:
 
 1. a Markdown **checklist** of findings to review and tick,
 2. a **PDF report** for the site owner, opening with a band in the project's own branding, and a separate **"Plan and effort" PDF** with the staged plan,
@@ -23,8 +35,7 @@ Claude Code:
 
 ```bash
 claude plugin marketplace add https://github.com/vadym-shliachkov/project-advisory.git
-claude plugin install project-health@project-health
-claude plugin install council@project-health
+claude plugin install project-advisory@project-advisory
 ```
 
 Codex:
@@ -34,30 +45,27 @@ git clone https://github.com/vadym-shliachkov/project-advisory.git
 codex plugin marketplace add ./project-advisory
 ```
 
-Then enable `project-health` and `council` from the plugin list in the Codex app, or add to `.codex/config.toml`:
+Then enable `project-advisory` from the plugin list in the Codex app, or add to `.codex/config.toml`:
 
 ```toml
-[plugins."project-health@project-health"]
-enabled = true
-
-[plugins."council@project-health"]
+[plugins."project-advisory@project-advisory"]
 enabled = true
 ```
 
 ## Use
 
 ```text
-/project-health:project-health analyse --url https://example.com
-/project-health:project-health report
-/project-health:project-health backlog
+/project-advisory:project-health analyse --url https://example.com
+/project-advisory:project-health report
+/project-advisory:project-health backlog
 ```
 
-In Codex, mention the skill (`$project-health`) with the same arguments.
+In Codex, mention the skill (`$project-health`, `$roadmap`, `$council`) with the same arguments.
 
 ### Implementation roadmap
 
 ```text
-/project-health:roadmap
+/project-advisory:roadmap
 ```
 
 The roadmap skill acts as the facilitator of a planning discussion. It goes through **every** problem in the report, ticked or not, until each one has an agreed fix plan, is moved to the backlog, or is discarded with a reason:
@@ -111,14 +119,24 @@ Everything is written to `.project-health/` in the analysed project:
 The knowledge base keeps what each run learned (stack, hosting, conventions) so later runs are faster and consistent. Add facts only a person knows:
 
 ```bash
-node plugins/project-health/skills/project-health/scripts/ph.mjs fact --root <project> --key business.goal --value "Get demo requests"
+node plugins/project-advisory/skills/project-health/scripts/ph.mjs fact --root <project> --key business.goal --value "Get demo requests"
 ```
+
+## Council
+
+```text
+/project-advisory:council [path] [--goal "<text>"] [--url <https://…>] [--data <folder>] [--budget <n>]
+```
+
+A cast of role agents (the customer's voice, search, content, conversion, competitors, an outsider) proposes ideas for reaching a goal. A red team and the other members try to prove each idea wrong, the proposers defend, narrow or concede, and a judge who took no part rules on what is left. The default goal is to make potential clients see clearly what the business offers and why to choose it, so that more of them get in touch.
+
+Every idea is a hypothesis with a test and a kill condition, and every claim cites evidence. Each session ends with two PDFs: the suggestions (every idea that survived, with where it comes from, the expected result and how to test it) and the discussion (the debate written up as a conversation). Ideas and their fate are kept in a ledger across sessions, in the same `.project-health/kb/` knowledge base the other skills use. Running a health check first gives the council findings to work from.
 
 ## Development
 
 ```bash
-cd plugins/project-health
+cd plugins/project-advisory
 npm test
 ```
 
-`tests/fixtures/make-static-html-repo.mjs <dir>` creates a sample site with planted issues for manual end-to-end runs.
+`tests/project-health/fixtures/make-static-html-repo.mjs <dir>` creates a sample site with planted issues for manual end-to-end runs.

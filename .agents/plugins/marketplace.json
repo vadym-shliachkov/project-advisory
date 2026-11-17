@@ -1,16 +1,10 @@
 {
-  "name": "project-health",
-  "interface": { "displayName": "Project Health" },
+  "name": "project-advisory",
+  "interface": { "displayName": "Project Advisory" },
   "plugins": [
     {
-      "name": "project-health",
-      "source": { "source": "local", "path": "./plugins/project-health" },
-      "policy": { "installation": "AVAILABLE", "authentication": "ON_INSTALL" },
-      "category": "Developer Tools"
-    },
-    {
-      "name": "council",
-      "source": { "source": "local", "path": "./plugins/council" },
+      "name": "project-advisory",
+      "source": { "source": "local", "path": "./plugins/project-advisory" },
       "policy": { "installation": "AVAILABLE", "authentication": "ON_INSTALL" },
       "category": "Developer Tools"
     }
