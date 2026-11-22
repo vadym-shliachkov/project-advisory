@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { readJson, writeJson } from './io.mjs';
-import { SKILL_DIR, LAB_DIR, sessionsDir, ignoreSessions } from './paths.mjs';
+import { skillDirOf, sessionsDir, ignoreSessions, kindOf, labelOf } from './paths.mjs';
 import { loadFacts, today, latestHealthRun } from './bank.mjs';
 
 // A council session: a cast of role agents proposes ideas for a goal, attacks them and a judge rules on what is left.
@@ -9,26 +9,40 @@ import { loadFacts, today, latestHealthRun } from './bank.mjs';
 // spend. Nothing here trusts an agent to stop by itself.
 
 export const DEFAULT_GOAL = 'Make potential clients see clearly what the business offers and why to choose it, on the site and beyond it, so that more of them get in touch';
-// The invention lab asks a larger question: not how to improve what is there, but what the business could become.
-export const LAB_GOAL = 'Find what the business could start, sell, build or become that would change its results far more than improving what it already has';
+// The venture board asks a larger question: not how to improve what is there, but what the business could become.
+export const VENTURE_GOAL = 'Find what the business could start, sell, build or become that would change its results far more than improving what it already has';
+// The invention lab asks about the thing itself: what it could do, have or become that nobody has made yet.
+export const LAB_GOAL = 'Invent things this project could do, have or become that nobody has made yet, grown from what it already is and from the people who use it';
 export const DEFAULT_BUDGET = 60;
+// The lab studies the thing before anyone invents, debates for up to three rounds and writes the minutes and a sketch
+// of every invention that survives: it needs more runs than the council.
+export const LAB_BUDGET = 80;
 // Runs kept back for the verdict and the two documents, so a long debate cannot leave the session without a result.
 export const RESERVE = 12;
 export const MAX_ROUNDS = 3;
-// The lab tests its bets on their assumptions, in at most two rounds: an invention is not defended line by line.
-export const LAB_ROUNDS = 2;
-export const maxRounds = (session) => (session.kind === 'lab' ? LAB_ROUNDS : MAX_ROUNDS);
+// The venture board tests its bets on their assumptions, in at most two rounds: a bet is not defended line by line.
+export const VENTURE_ROUNDS = 2;
 export const PHASES = ['open', 'evidence', 'track-record', 'propose', 'docket', 'examine', 'verdict', 'set', 'write', 'review', 'close', 'done'];
-// The lab frames the problem before anyone proposes, and builds on every idea before anyone attacks it.
-export const LAB_PHASES = ['open', 'evidence', 'frame', 'propose', 'amplify', 'docket', 'examine', 'verdict', 'write', 'review', 'close', 'done'];
+// The venture board frames the problem before anyone proposes, and builds on every idea before anyone attacks it.
+export const VENTURE_PHASES = ['open', 'evidence', 'frame', 'propose', 'amplify', 'docket', 'examine', 'verdict', 'write', 'review', 'close', 'done'];
+// The invention lab first studies the thing it works on and shows the person what it understood (the study), then
+// frames, provokes, invents, builds on every invention, and debates them as the council does.
+export const LAB_PHASES = ['open', 'evidence', 'study', 'frame', 'propose', 'amplify', 'docket', 'examine', 'verdict', 'set', 'write', 'review', 'close', 'done'];
+export const isVenture = (session) => session?.kind === 'venture';
 export const isLab = (session) => session?.kind === 'lab';
-const DEBATE = ['open', 'evidence', 'track-record', 'frame', 'propose', 'amplify', 'docket', 'examine'];
+// Both the venture board and the lab frame the problem, provoke, deal cards and build on every idea before the docket.
+export const isFramed = (session) => isVenture(session) || isLab(session);
+export const maxRounds = (session) => (isVenture(session) ? VENTURE_ROUNDS : MAX_ROUNDS);
+export const phasesOf = (session) => (isLab(session) ? LAB_PHASES : isVenture(session) ? VENTURE_PHASES : PHASES);
+const GOALS = { council: DEFAULT_GOAL, venture: VENTURE_GOAL, lab: LAB_GOAL };
+export const defaultGoal = (kind = 'council') => GOALS[kind] ?? DEFAULT_GOAL;
+const DEBATE = ['open', 'evidence', 'track-record', 'study', 'frame', 'propose', 'amplify', 'docket', 'examine'];
 // The judge's docket is paid like the verdict, from the reserve when it must be: without it the session can neither go
 // on to the examination nor reach the verdict, and every proposal would be lost.
 const REFUSED_WHEN_SPENT = DEBATE.filter((p) => p !== 'docket');
 export const SESSION_ID_RE = /^\d{4}-\d{2}-\d{2}(-\d+)?$/;
 
-export const loadCast = (kind = 'council') => readJson(path.join(kind === 'lab' ? LAB_DIR : SKILL_DIR, 'references', 'cast.json'));
+export const loadCast = (kind = 'council') => readJson(path.join(skillDirOf(kind), 'references', 'cast.json'));
 
 export function listSessions(root, kind = 'council') {
   const dir = sessionsDir(root, kind);
@@ -49,7 +63,7 @@ export function loadSession(root, id, kind = 'council') {
 export function resolveSession(root, id, kind = 'council') {
   if (id) return loadSession(root, id, kind);
   const open = listSessions(root, kind).reverse().find((s) => loadSession(root, s, kind).session.phase !== 'done');
-  if (!open) throw new Error(`No ${kind === 'lab' ? 'invention lab' : 'council'} session is under way. Start one with "init".`);
+  if (!open) throw new Error(`No ${kind === 'council' ? 'council' : labelOf(kind).toLowerCase()} session is under way. Start one with "init".`);
   return loadSession(root, open, kind);
 }
 
@@ -59,15 +73,15 @@ export function saveSession(dir, session) {
 
 function goalFor(root, given, kind) {
   if (given?.trim()) return { goal: given.trim(), goalSource: 'given' };
-  const stored = loadFacts(root).find((f) => f.key === `${kind === 'lab' ? 'lab' : 'council'}.goal`);
+  const stored = loadFacts(root).find((f) => f.key === `${kind}.goal`);
   if (stored) return { goal: String(stored.value), goalSource: 'knowledge base' };
-  return { goal: kind === 'lab' ? LAB_GOAL : DEFAULT_GOAL, goalSource: 'default' };
+  return { goal: defaultGoal(kind), goalSource: 'default' };
 }
 
-export function createSession(root, { goal, url, data, budget, kind = 'council', date = today() } = {}) {
+export function createSession(root, { goal, url, data, budget, kind = 'council', object = null, focus = null, date = today() } = {}) {
   const unfinished = listSessions(root, kind).reverse().find((s) => loadSession(root, s, kind).session.phase !== 'done');
   if (unfinished) throw new Error(`Session ${unfinished} is not finished (phase: ${loadSession(root, unfinished, kind).session.phase}). Continue it with --session ${unfinished}, or set it aside with "close --abandon --session ${unfinished}".`);
-  const total = budget === undefined ? DEFAULT_BUDGET : Number(budget);
+  const total = budget === undefined ? (kind === 'lab' ? LAB_BUDGET : DEFAULT_BUDGET) : Number(budget);
   if (!Number.isInteger(total) || total < RESERVE + 10) throw new Error(`--budget must be a whole number of at least ${RESERVE + 10}: a session needs about ${DEFAULT_BUDGET} agent runs, ${RESERVE} of them for the verdict and the documents.`);
   let dataDir = null;
   if (data) {
@@ -82,13 +96,15 @@ export function createSession(root, { goal, url, data, budget, kind = 'council',
   // A health check of the project, when the project-health skill has run one, gives the council findings to work from.
   const health = latestHealthRun(root);
   const session = {
-    id, ...(kind === 'lab' ? { kind } : {}), ...goalFor(root, goal, kind), url: url ?? health?.url ?? null, data: dataDir, run: health?.id ?? null,
+    id, ...(kind !== 'council' ? { kind } : {}), ...goalFor(root, goal, kind),
+    // The thing the lab works on: what kind of thing it is, and the part of it the person asked the lab to look at.
+    ...(kind === 'lab' ? { object, ...(focus?.trim() ? { focus: focus.trim() } : {}) } : {}), url: url ?? health?.url ?? null, data: dataDir, run: health?.id ?? null,
     budget: total, runs: 0, closing: false,
     phase: 'open', round: 0, step: null,
     cast: loadCast(kind).seats, assignments: {}, turns: [], log: [], createdAt: new Date().toISOString(),
   };
   // A goal that was cast before meets the same cast again.
-  const stored = kind === 'lab' ? null : loadFacts(root).find((f) => f.key === 'council.cast')?.value;
+  const stored = kind !== 'council' ? null : loadFacts(root).find((f) => f.key === 'council.cast')?.value;
   if (stored?.goal === session.goal && Array.isArray(stored.cast)) session.cast = stored.cast;
   saveSession(dir, session);
   return { dir, session };

@@ -188,12 +188,12 @@ test('sessions are ignored by git; the shared .gitignore keeps what it had', () 
   const root = tmpDir();
   ignoreSessions(root);
   const file = path.join(root, '.project-health', '.gitignore');
-  assert.equal(fs.readFileSync(file, 'utf8'), 'runs/\nprofile.json\nlatest.json\ncouncil/\nlab/\ncache/\nideas.html\n');
+  assert.equal(fs.readFileSync(file, 'utf8'), 'runs/\nprofile.json\nlatest.json\ncouncil/\nventure/\nlab/\ncache/\nideas.html\n');
   ignoreSessions(root);
-  assert.equal(fs.readFileSync(file, 'utf8'), 'runs/\nprofile.json\nlatest.json\ncouncil/\nlab/\ncache/\nideas.html\n');
+  assert.equal(fs.readFileSync(file, 'utf8'), 'runs/\nprofile.json\nlatest.json\ncouncil/\nventure/\nlab/\ncache/\nideas.html\n');
   fs.writeFileSync(file, 'runs/\nnotes.txt');
   ignoreSessions(root);
-  assert.equal(fs.readFileSync(file, 'utf8'), 'runs/\nnotes.txt\ncouncil/\nlab/\ncache/\nideas.html\n');
+  assert.equal(fs.readFileSync(file, 'utf8'), 'runs/\nnotes.txt\ncouncil/\nventure/\nlab/\ncache/\nideas.html\n');
 });
 
 test('the bank refuses the usual shapes of secrets', () => {

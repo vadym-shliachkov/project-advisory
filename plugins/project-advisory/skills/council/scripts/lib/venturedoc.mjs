@@ -1,10 +1,10 @@
 import { esc, rich, page, countChips, tag, stamp, whereBlock, roman } from './html.mjs';
 import { namer, ideaTags, killedRows } from './brief.mjs';
 
-// The invention lab's own document: the bets. Each surviving bet opens as a press release from the day it worked,
+// The venture board's own document: the bets. Each surviving bet opens as a press release from the day it worked,
 // with the questions a sceptical reader would ask, then what would have to be true (the riskiest marked), the cheapest
 // first step that would show whether it is, what it is worth if it works and when to drop it. Then the bets that were
-// not proved, the killed ones with the best that could be said for them, the frame the lab worked from, and the
+// not proved, the killed ones with the best that could be said for them, the frame the board worked from, and the
 // provocation wall: every deliberately absurd statement, with what was harvested from it.
 
 const UPSIDE_NOTE = {
@@ -97,7 +97,7 @@ ${model.killed.map((idea) => other(idea, `${killedRows(idea, dead.get(idea.id), 
   const f = frame?.frame;
   const picked = new Set(frame?.picked ?? []);
   const framed = f ? `<section class="set"><h2>The frame</h2>
-<p class="lead">What the lab worked from, before anyone proposed.${frame?.picked?.length ? ' The framings you picked are marked.' : ''}</p>
+<p class="lead">What the venture board worked from, before anyone proposed.${frame?.picked?.length ? ' The framings you picked are marked.' : ''}</p>
 <h4>The ideal result</h4><p>${rich(f.ideal)}</p>
 <h4>Where the business is, and the step after</h4><p>${rich(f.curve.now)} ${rich(f.curve.next)}</p>
 <h4>Contradictions</h4><ul>${f.contradictions.map((c) => `<li>${picked.has(c.id) ? '<b>Picked.</b> ' : ''}${rich(c.want)}, but then ${rich(c.butThen)}. <span class="meta">Separated: ${rich(c.separate)}</span></li>`).join('')}</ul>
@@ -113,10 +113,10 @@ ${model.killed.map((idea) => other(idea, `${killedRows(idea, dead.get(idea.id), 
 
   const questions = suggestions.questions ?? [];
   const asks = questions.length ? `<section class="open" id="questions"><h2>Questions only you can answer</h2><ol class="questions">${questions.map((q) => `<li>${rich(q.text)}</li>`).join('')}</ol></section>` : '';
-  const method = `<section class="method" id="method"><h2>How the lab works</h2>
+  const method = `<section class="method" id="method"><h2>How the venture board works</h2>
 <p class="lead">A framer set the problem (the ideal result, the contradictions of the business, what it has and does not use, where it is on its curve, and "how might we" questions, two of which question the goal itself). A provocateur wrote deliberately absurd statements. Each seat answered its framings with cards dealt to it (inventive principles, ways to separate a contradiction, business-model patterns, moves that eliminate, reduce, raise or create, and other trades), then harvested the provocations. Another seat made every bet bigger before anyone attacked it. A sceptic then attacked what each bet assumes, never the bet as a whole, and a judge who took no part ruled on what it is worth if it works and what it rests on.</p>
 <p class="meta">Session ${esc(model.session.id)}. ${esc(model.session.runs)} of ${esc(model.session.budget)} agent runs were used. The full record is kept with the session; the session's pages show it bet by bet.</p></section>`;
-  return page({ title: 'Invention lab · The bets', kind: 'suggestions bets-doc', model, body: [glance, bets, notNow, killed, framed, wall, asks, method].filter(Boolean).join('\n') });
+  return page({ title: 'Venture board · The bets', kind: 'suggestions bets-doc', model, body: [glance, bets, notNow, killed, framed, wall, asks, method].filter(Boolean).join('\n') });
 }
 
 export { roman };

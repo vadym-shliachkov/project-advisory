@@ -118,7 +118,7 @@ The council skill writes this file. Other skills read it.
 
 ## groundwork/
 
-Written by the council and the invention lab (both run on the council's scripts); read by both. Each file is the latest research of its kind, replaced whole when it is done again:
+Written by the council, the venture board and the invention lab (all run on the council's scripts); read by all three. The council and the venture board share the primer, the competitor scan and the horizon scan; the lab writes and reads its own: the anatomy of the thing (reused only while the project's code has not changed), its genre, what its users say and what has become possible for things of its kind. Each file is the latest research of its kind, replaced whole when it is done again:
 
 ```json
 { "kind": "competitors", "at": "2026-11-17", "url": "https://example.com",

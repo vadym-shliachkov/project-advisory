@@ -94,7 +94,7 @@ export function addEvidence(evidence, items, { by, root, session, date = today()
     if (item.grade !== 'argued' && !one(item.source)) { errors.push(`${at}.source: ${item.grade} evidence needs its source`); return; }
     // An opening from the horizon scan is a change in the world, and a line of the primer a fact about the trade:
     // without the page that reports it, either is a guess.
-    if (['horizon', 'primer'].includes(by) && !/^https?:\/\/\S+$/i.test(one(item.source))) { errors.push(`${at}.source: ${by === 'primer' ? 'a fact about the trade' : 'an opening'} needs the address of the page that reports it, and its "date" when the page gives one`); return; }
+    if (['horizon', 'primer', 'tech', 'genre'].includes(by) && !/^https?:\/\/\S+$/i.test(one(item.source))) { errors.push(`${at}.source: ${by === 'primer' ? 'a fact about the trade' : by === 'genre' ? 'a fact about things of this kind' : 'an opening'} needs the address of the page that reports it, and its "date" when the page gives one`); return; }
     const { grade, warning } = gradeFor(item, { root, session, facts });
     if (warning) warnings.push(warning);
     const source = one(item.source) || null;
@@ -114,7 +114,7 @@ const daysBetween = (a, b) => (Date.parse(b) - Date.parse(a)) / 86400000;
 // lacks. The live site is not fetched here: agents open its pages themselves and cite them by address. The groundwork
 // an earlier session (of this skill or of the invention lab) left fresh in the knowledge bank is taken in as well,
 // unless `refresh` asks for it to be done again: its turns are then taken.
-export function collectEvidence(root, session, { date = today(), refresh = [] } = {}) {
+export function collectEvidence(root, session, { date = today(), refresh = [], head = null } = {}) {
   const entries = [];
   const missing = [];
   const add = (grade, source, text, by, at = date) => entries.push({ id: nextId(entries), grade, source, date: at, text: clip(one(text)), by });
@@ -155,10 +155,11 @@ export function collectEvidence(root, session, { date = today(), refresh = [] } 
   const data = dataInventory(session.data);
   if (!session.data) missing.push('No data was shared (analytics, search console, enquiries), so nothing in this session is measured: ideas rest on what can be seen and argued.');
   else if (!data.length) missing.push(`The data folder ${session.data} is empty.`);
-  if (!session.url) missing.push('No live site address is known, so the site itself could not be looked at.');
+  if (!session.url && session.kind === 'lab') missing.push('No live address was given, so the thing is studied from its files only: the anatomist reads the project, and nobody sees it running.');
+  else if (!session.url) missing.push('No live site address is known, so the site itself could not be looked at.');
 
   const reused = [];
-  for (const { kind, record } of reusable(root, session, { refresh, date })) {
+  for (const { kind, record } of reusable(root, session, { refresh, date, head })) {
     for (const e of record.entries ?? []) entries.push({ ...e, id: nextId(entries), reusedFrom: `${record.by?.skill ?? 'council'} ${record.by?.session ?? record.at}` });
     reused.push({ kind, at: record.at, from: record.by ?? null, entries: (record.entries ?? []).length });
   }

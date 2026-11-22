@@ -29,6 +29,9 @@ const OPTIONS = {
   refresh: { type: 'string' },
   kind: { type: 'string' },
   pick: { type: 'string' },
+  object: { type: 'string' },
+  focus: { type: 'string' },
+  correct: { type: 'string' },
   show: { type: 'boolean' },
   collect: { type: 'boolean' },
   force: { type: 'boolean' },
@@ -40,7 +43,7 @@ const OPTIONS = {
 const [command, ...rest] = process.argv.slice(2);
 const fn = COMMANDS[command];
 if (!fn) {
-  console.error(`Usage: ${process.env.COUNCIL_KIND === 'lab' ? 'lab' : 'council'} <${Object.keys(COMMANDS).join('|')}> [--root <dir>] [--session <id>] [options]`);
+  console.error(`Usage: ${process.env.COUNCIL_KIND ?? 'council'} <${Object.keys(COMMANDS).join('|')}> [--root <dir>] [--session <id>] [options]`);
   process.exit(2);
 }
 

@@ -159,9 +159,10 @@ test('a picture of a page taken in the last week is used again, with the date it
   assert.equal(cachedLook(root, target), null);
 });
 
-test('an idea that reached further than the council could test is marked for the invention lab in the ledger', () => {
+test('an idea that reached further than the council could test is marked for the venture board in the ledger', () => {
   const base = { id: 'I4', title: 'A product built from client work', proposedBy: 'outsider', status: 'killed', verdict: { causeOfDeath: 'Nothing on the site could show it' }, history: [] };
-  assert.match(ideaLine({ ...base, labCandidate: true }), /worth taking to the invention lab/);
-  assert.doesNotMatch(ideaLine(base), /invention lab/);
+  assert.match(ideaLine({ ...base, ventureCandidate: true }), /worth taking to the venture board/);
+  assert.doesNotMatch(ideaLine(base), /venture board|invention lab/);
+  assert.match(ideaLine({ ...base, origin: 'venture' }), /{from the venture board}/);
   assert.match(ideaLine({ ...base, origin: 'lab' }), /{from the invention lab}/);
 });

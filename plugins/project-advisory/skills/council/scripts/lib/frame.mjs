@@ -1,10 +1,11 @@
 import path from 'node:path';
 import { readJson, writeJson } from './io.mjs';
-import { LAB_DIR } from './paths.mjs';
+import { skillDirOf, kindOf } from './paths.mjs';
 import { proposers } from './session.mjs';
 
-// The invention lab: what runs differently from the council. The lab is its own skill (skills/lab), with its own
-// cast, prompts and documents; it runs on the council's scripts. A lab session:
+// What the venture board and the invention lab do differently from the council: they frame the problem, provoke, deal
+// idea cards, and build on every idea before anyone attacks it. Each is its own skill (skills/venture, skills/lab),
+// with its own cast, prompts, cards and documents; both run on the council's scripts. A venture session:
 //
 //   frame     a framer sets the problem (the ideal final result, the contradictions of the business, its unused
 //             resources, where it is on its curve, and "how might we" questions at three heights); a provocateur then
@@ -20,8 +21,12 @@ import { proposers } from './session.mjs';
 //
 // Ideas here are bets: what must be true is the debate, not what can be counted in ten weeks on today's site.
 
+// The invention lab frames the thing it studied instead of the business (its ideal result, its contradictions, a
+// morphological box of what it is made of, where it stands on its line of evolution), and debates its inventions as
+// the council does: see invention.mjs.
+
 export const UPSIDES = ['incremental', 'significant', 'transformative'];
-export const LAB_SCALES = ['new', 'direction'];
+export const VENTURE_SCALES = ['new', 'direction'];
 export const PROVOCATION_KINDS = ['reversal', 'escape', 'exaggeration', 'distortion', 'wishful'];
 const ALTITUDES = ['narrow', 'wide', 'reframe'];
 const CARDS_PER_SEAT = 3;
@@ -29,7 +34,7 @@ const CARDS_PER_SEAT = 3;
 export const framePath = (dir) => path.join(dir, 'frame.json');
 export const loadFrame = (dir) => readJson(framePath(dir), null);
 export const saveFrame = (dir, frame) => writeJson(framePath(dir), frame);
-export const loadCards = () => readJson(path.join(LAB_DIR, 'references', 'cards.json')).cards;
+export const loadCards = (kind = 'venture') => readJson(path.join(skillDirOf(kind), 'references', 'cards.json')).cards;
 
 const one = (s) => String(s ?? '').replace(/\s+/g, ' ').trim();
 function textError(value, at, min, max) {
@@ -43,7 +48,8 @@ const idsOf = (list, prefix) => (list ?? []).map((x, i) => x.id ?? `${prefix}${i
 
 // ---- The frame ----
 
-export function validateFrame(f) {
+export function validateFrame(f, kind = 'venture') {
+  if (kind === 'lab') return validateLabFrame(f);
   if (!f || typeof f !== 'object' || Array.isArray(f)) return ['$.frame: an object is required'];
   const errors = [...textError(f.ideal, '$.frame.ideal', 30, 400)];
   if (!Array.isArray(f.contradictions) || f.contradictions.length < 2 || f.contradictions.length > 5) errors.push('$.frame.contradictions: two to five, each { "want", "butThen", "separate" }: what the business needs, what that makes worse, and how the two could be separated');
@@ -66,12 +72,59 @@ export function validateFrame(f) {
 }
 
 // Ids are given by the script: H1… for the questions, C1… for the contradictions, P1… for the provocations.
-export function cleanFrame(f) {
+export function cleanFrame(f, kind = 'venture') {
+  if (kind === 'lab') return cleanLabFrame(f);
   return {
     ideal: one(f.ideal),
     contradictions: f.contradictions.map((c, i) => ({ id: `C${i + 1}`, want: one(c.want), butThen: one(c.butThen), separate: one(c.separate) })),
     resources: f.resources.map(one),
     curve: { now: one(f.curve.now), next: one(f.curve.next) },
+    questions: f.questions.map((q, i) => ({ id: `H${i + 1}`, text: one(q.text), altitude: q.altitude })),
+  };
+}
+
+// The invention lab's frame, about the thing rather than the business. The morphological box lists what the thing is
+// made of (its dimensions) and the options each could take, with the one it has now: the combinations nobody has built
+// are where a seat looks first. Its line of evolution says where it stands (by hand or automatic, fixed or adapting,
+// one of a kind or one of many) and what the next step on that line would be.
+function questionErrors(f) {
+  const errors = [];
+  if (!Array.isArray(f.questions) || f.questions.length < 6 || f.questions.length > 10) return ['$.frame.questions: six to ten "How might we" questions, each { "text", "altitude" }'];
+  f.questions.forEach((q, i) => {
+    errors.push(...textError(q?.text, `$.frame.questions[${i}].text`, 15, 240));
+    if (!/^how might we\b/i.test(one(q?.text))) errors.push(`$.frame.questions[${i}].text: start with "How might we"`);
+    if (!ALTITUDES.includes(q?.altitude)) errors.push(`$.frame.questions[${i}].altitude: ${ALTITUDES.join(', ')}`);
+  });
+  if (f.questions.filter((q) => q?.altitude === 'reframe').length < 2) errors.push('$.frame.questions: at least two at the altitude "reframe": questions that change the goal itself');
+  return errors;
+}
+function contradictionErrors(f) {
+  if (!Array.isArray(f.contradictions) || f.contradictions.length < 2 || f.contradictions.length > 5) return ['$.frame.contradictions: two to five, each { "want", "butThen", "separate" }: what the thing needs, what that makes worse, and how the two could be separated'];
+  return f.contradictions.flatMap((c, i) => [...textError(c?.want, `$.frame.contradictions[${i}].want`, 10, 240), ...textError(c?.butThen, `$.frame.contradictions[${i}].butThen`, 10, 240), ...textError(c?.separate, `$.frame.contradictions[${i}].separate`, 10, 300)]);
+}
+export function validateLabFrame(f) {
+  if (!f || typeof f !== 'object' || Array.isArray(f)) return ['$.frame: an object is required'];
+  const errors = [...textError(f.ideal, '$.frame.ideal', 30, 400), ...contradictionErrors(f)];
+  if (!Array.isArray(f.morphology) || f.morphology.length < 3 || f.morphology.length > 6) errors.push('$.frame.morphology: three to six dimensions of the thing, each { "name", "options": [three to six], "now": the position of the option it has today, or -1 }');
+  else f.morphology.forEach((d, i) => {
+    const at = `$.frame.morphology[${i}]`;
+    errors.push(...textError(d?.name, `${at}.name`, 3, 60));
+    if (!Array.isArray(d?.options) || d.options.length < 3 || d.options.length > 6) errors.push(`${at}.options: three to six options this dimension could take, the one it has now among them`);
+    else d.options.forEach((o, j) => errors.push(...textError(o, `${at}.options[${j}]`, 2, 80)));
+    if (!Number.isInteger(d?.now) || d.now < -1 || d.now >= (d?.options?.length ?? 0)) errors.push(`${at}.now: the position (from 0) of the option the thing has today, or -1 when it has none of them`);
+  });
+  if (!f.evolution || typeof f.evolution !== 'object') errors.push('$.frame.evolution: { "now", "next" }: where the thing stands on its line of evolution, and the next step on it');
+  else errors.push(...textError(f.evolution.now, '$.frame.evolution.now', 20, 300), ...textError(f.evolution.next, '$.frame.evolution.next', 20, 300));
+  errors.push(...questionErrors(f));
+  for (const key of Object.keys(f)) if (!['ideal', 'contradictions', 'morphology', 'evolution', 'questions'].includes(key)) errors.push(`$.frame: unknown property "${key}"`);
+  return errors;
+}
+export function cleanLabFrame(f) {
+  return {
+    ideal: one(f.ideal),
+    contradictions: f.contradictions.map((c, i) => ({ id: `C${i + 1}`, want: one(c.want), butThen: one(c.butThen), separate: one(c.separate) })),
+    morphology: f.morphology.map((d, i) => ({ id: `M${i + 1}`, name: one(d.name), options: d.options.map(one), now: d.now })),
+    evolution: { now: one(f.evolution.now), next: one(f.evolution.next) },
     questions: f.questions.map((q, i) => ({ id: `H${i + 1}`, text: one(q.text), altitude: q.altitude })),
   };
 }
@@ -110,7 +163,7 @@ function seeded(seed) {
 const shuffle = (list, rnd) => { const a = [...list]; for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(rnd() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
 
 // Each seat gets cards from three different families, and one or two framings, spread so every framing has a seat.
-export function deal(session, frame, cards = loadCards()) {
+export function deal(session, frame, cards = loadCards(kindOf(session))) {
   const rnd = seeded(session.id);
   const seats = proposers(session);
   const families = [...new Set(cards.map((c) => c.family))];
@@ -146,7 +199,7 @@ export function assignAmplifiers(session, record) {
 }
 
 // What a seat is handed for the first pass: the frame, its framings and its cards in full.
-export function dealtTo(session, frame, role, cards = loadCards()) {
+export function dealtTo(session, frame, role, cards = loadCards(kindOf(session))) {
   const byId = new Map(cards.map((c) => [c.id, c]));
   return {
     frame: frame?.frame ?? null,
@@ -156,11 +209,12 @@ export function dealtTo(session, frame, role, cards = loadCards()) {
   };
 }
 
-// ---- The fields a bet carries beyond a council hypothesis ----
+// ---- The fields a bet of the venture board carries beyond a council hypothesis ----
 
-export function betErrors(s, at, { session, frame, pass, role }) {
+export function betErrors(s, at, { session, frame, pass, role, scales = null }) {
   const errors = [];
-  if (!LAB_SCALES.includes(s.scale)) errors.push(`${at}.scale: new (something the business does not do or have at all) or direction (a remake of what it is); the lab does not propose edits`);
+  // The lab checks its own scales (see invention.mjs); the venture board's are new and direction.
+  if (!scales && !VENTURE_SCALES.includes(s.scale)) errors.push(`${at}.scale: new (something the business does not do or have at all) or direction (a remake of what it is); the venture board does not propose edits`);
   if (!Array.isArray(s.assumptions) || s.assumptions.length < 2 || s.assumptions.length > 6) errors.push(`${at}.assumptions: two to six things that would have to be true for this to work, each one sentence`);
   else s.assumptions.forEach((a, i) => errors.push(...textError(a, `${at}.assumptions[${i}]`, 10, 240)));
   if (!Number.isInteger(s.riskiest) || s.riskiest < 0 || s.riskiest >= (s.assumptions?.length ?? 0)) errors.push(`${at}.riskiest: the position in "assumptions" (from 0) of the one most likely to be false`);

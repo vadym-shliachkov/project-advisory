@@ -6,7 +6,7 @@ import { loadFacts } from './bank.mjs';
 import { loadIdeas, trackRecord } from './ideas.mjs';
 import { seat } from './session.mjs';
 import { inThread } from './record.mjs';
-import { adopted } from './lab.mjs';
+import { adopted } from './frame.mjs';
 
 // The two documents of a session, as data: what the script knows for certain (the model, built from the record and
 // the verdicts) and what the writers add (checked here against the model before it is saved). A document never
@@ -17,7 +17,7 @@ const STRENGTH_ORDER = ['strong', 'fair', 'speculative'];
 const EFFORT_ORDER = ['small', 'medium', 'large'];
 // The survivors are listed from the furthest-reaching: a bet on direction is a decision for the owner, a change to a
 // page is work for whoever keeps the site.
-const SCALE_ORDER = ['new', 'direction', 'addition', 'adjustment', null];
+const SCALE_ORDER = ['new', 'direction', 'remake', 'product', 'feature', 'addition', 'adjustment', null];
 export const BOLD = ['new', 'direction'];
 const lived = (r) => r.verdict === 'survived' || r.verdict === 'narrowed';
 
@@ -71,6 +71,9 @@ export function buildModel(ctx, root) {
       originalHypothesis: h.hypothesis,
       // A bet of the invention lab: what it assumes, the riskiest of it, what it is worth if it works, where it came from.
       ...(h.assumptions ? { bet: { assumptions: h.assumptions, riskiest: h.riskiest, upside: ruling?.upside ?? h.upside, riskiestNow: ruling?.riskiest ?? null, answers: h.answers ?? null, provocation: h.provocation ?? null, cards: h.cards ?? [], amplified: Boolean(t.adopted) } } : {}), effort: h.effort, scale: narrowed?.scale ?? h.scale ?? null,
+      // An invention of the lab: how a person would live it, what of the thing it grows from, and how new it is, as
+      // claimed and as ruled.
+      ...(h.experience ? { invention: { experience: h.experience, buildsOn: h.buildsOn, claimed: h.newTo, newTo: ruling?.newTo ?? null, feasible: ruling?.feasible ?? null } } : {}),
       where: narrowed?.where ?? h.where ?? [], novelty: t.novelty ?? null, pass: t.pass ?? 1, uncovered: h.uncovered ?? null,
       priorArt: h.priorArt ?? null,
       test: narrowed ? narrowed.test ?? said.filter((s) => s.type === 'reply' && s.by === t.by && s.narrowed?.test).at(-1)?.narrowed.test ?? h.test : h.test,
@@ -87,7 +90,7 @@ export function buildModel(ctx, root) {
   const killed = ideas.filter((i) => i.verdict === 'killed');
   const undecided = ideas.filter((i) => i.verdict === 'undecided');
   return {
-    session: { id: session.id, kind: session.kind ?? 'council', goal: session.goal, url: session.url, budget: session.budget, runs: session.runs },
+    session: { id: session.id, kind: session.kind ?? 'council', goal: session.goal, url: session.url, budget: session.budget, runs: session.runs, ...(session.object ? { object: session.object } : {}), ...(session.focus ? { focus: session.focus } : {}) },
     brand: brandOf(root),
     cast: session.cast,
     ideas, survivors,
@@ -172,12 +175,12 @@ const SURVIVOR_TEXTS = { sentence: [20, 260], comesFrom: [20, 600], expected: [2
 const { upside: _upside, ...BEFORE_UPSIDE } = SURVIVOR_TEXTS;
 // Documents saved before a field was added are still printed: without what if-it-works means, and with longer texts.
 const OLD_TEXTS = { ...BEFORE_UPSIDE, expected: [20, 500], why: [20, 600], killCondition: [10, 400], firstStep: [10, 300] };
-// A surviving bet of the invention lab: the idea, why it could work, its first step, when to drop it, what it is worth
+// A surviving bet of the venture board: the idea, why it could work, its first step, when to drop it, what it is worth
 // if it works, a press release from the day it worked and the questions a sceptic would ask about it.
-export const LAB_SURVIVOR_TEXTS = { sentence: [20, 260], why: [20, 450], firstStep: [10, 240], killCondition: [10, 300], upside: [20, 300] };
+export const VENTURE_SURVIVOR_TEXTS = { sentence: [20, 260], why: [20, 450], firstStep: [10, 240], killCondition: [10, 300], upside: [20, 300] };
 const PRESS_TEXTS = { headline: [10, 120], subhead: [20, 240], body: [200, 1400], quote: [20, 300] };
-function labSurvivorErrors(s, at) {
-  const errors = Object.entries(LAB_SURVIVOR_TEXTS).flatMap(([field, [min, max]]) => textErrors(s[field], `${at}.${field}`, min, max));
+function ventureSurvivorErrors(s, at) {
+  const errors = Object.entries(VENTURE_SURVIVOR_TEXTS).flatMap(([field, [min, max]]) => textErrors(s[field], `${at}.${field}`, min, max));
   if (!s.pressRelease || typeof s.pressRelease !== 'object') errors.push(`${at}.pressRelease: the press release from the day it worked, { "headline", "subhead", "body", "quote" }`);
   else {
     for (const [field, [min, max]] of Object.entries(PRESS_TEXTS)) errors.push(...textErrors(s.pressRelease[field], `${at}.pressRelease.${field}`, min, max));
@@ -185,6 +188,29 @@ function labSurvivorErrors(s, at) {
   }
   if (!Array.isArray(s.faq) || s.faq.length < 2 || s.faq.length > 4) errors.push(`${at}.faq: two to four questions a sceptic would ask, each { "q", "a" }`);
   else s.faq.forEach((f, j) => errors.push(...textErrors(f?.q, `${at}.faq[${j}].q`, 10, 200), ...textErrors(f?.a, `${at}.faq[${j}].a`, 20, 500)));
+  return errors;
+}
+
+// A surviving invention of the lab: what it is, how a person would live it, why it is new (what was searched, the
+// closest thing found and the difference), why it could work, the smallest prototype that would show whether it does,
+// the first step, when to drop it and what it is worth if it works; then, as in the council, the attacks it survived
+// and what is still uncertain.
+export const INVENTION_TEXTS = { sentence: [20, 260], whyNew: [20, 450], why: [20, 450], prototype: [20, 450], firstStep: [10, 240], killCondition: [10, 300], upside: [20, 300] };
+function inventionSurvivorErrors(s, at) {
+  const errors = Object.entries(INVENTION_TEXTS).flatMap(([field, [min, max]]) => textErrors(s[field], `${at}.${field}`, min, max));
+  if (!Array.isArray(s.experience) || s.experience.length < 3 || s.experience.length > 6) errors.push(`${at}.experience: three to six steps, how a person who uses the thing would live it, in plain words for the reader`);
+  else s.experience.forEach((x, j) => errors.push(...textErrors(x, `${at}.experience[${j}]`, 10, 240)));
+  errors.push(...attackAnswerErrors(s, at));
+  return errors;
+}
+
+// The attacks a survivor came through and what is still uncertain about it: the council's and the lab's.
+function attackAnswerErrors(s, at) {
+  const errors = [];
+  if (!Array.isArray(s.survived) || s.survived.length < 1 || s.survived.length > 4) errors.push(`${at}.survived: one to four of the strongest attacks, each with how it was answered`);
+  else s.survived.forEach((x, j) => errors.push(...textErrors(x?.attack, `${at}.survived[${j}].attack`, 15, 320), ...textErrors(x?.answer, `${at}.survived[${j}].answer`, 15, 320)));
+  if (!Array.isArray(s.uncertain) || s.uncertain.length < 1 || s.uncertain.length > 5) errors.push(`${at}.uncertain: one to five things nobody could test; an idea with nothing uncertain was not examined`);
+  else s.uncertain.forEach((x, j) => errors.push(...textErrors(x, `${at}.uncertain[${j}]`, 15, 320)));
   return errors;
 }
 
@@ -201,7 +227,7 @@ export function validateSuggestions(doc, model, { strict = true } = {}) {
   if (!doc || typeof doc !== 'object' || Array.isArray(doc)) return ['The result must be a JSON object'];
   if (!model.final) return ['The verdicts are not final yet; the suggestions are written after the session leaves the set'];
   const TEXTS = strict ? SURVIVOR_TEXTS : OLD_TEXTS;
-  const lab = model.session.kind === 'lab';
+  const kind = model.session.kind ?? 'council';
   errors.push(...textErrors(unlinked(doc.summary), '$.summary', 60, strict ? SUMMARY_MAX : 700), ...linkErrors(doc.summary, '$.summary', model));
   const list = Array.isArray(doc.survivors) ? doc.survivors : null;
   if (!list) return [...errors, '$.survivors: an array is required (empty when nothing survived)'];
@@ -219,14 +245,12 @@ export function validateSuggestions(doc, model, { strict = true } = {}) {
     const linked = new Set(linksIn(raw).map(sameUrl));
     if (strict) for (const w of idea.where) if (!linked.has(sameUrl(w.url))) errors.push(`${at}: link the page this idea changes where you first name it, as [${w.part.length > 40 ? 'the page' : w.part}](${w.url}): the reader does not know the site by heart`);
     const s = unlinked(raw);
-    if (lab) errors.push(...labSurvivorErrors(s, at));
+    if (kind === 'venture') errors.push(...ventureSurvivorErrors(s, at));
+    else if (kind === 'lab') errors.push(...inventionSurvivorErrors(s, at));
     else {
       for (const [field, [min, max]] of Object.entries(TEXTS)) errors.push(...textErrors(s[field], `${at}.${field}`, min, max));
       if (!strict && s.upside !== undefined) errors.push(...textErrors(s.upside, `${at}.upside`, ...SURVIVOR_TEXTS.upside));
-      if (!Array.isArray(s.survived) || s.survived.length < 1 || s.survived.length > 4) errors.push(`${at}.survived: one to four of the strongest attacks, each with how it was answered`);
-      else s.survived.forEach((x, j) => errors.push(...textErrors(x?.attack, `${at}.survived[${j}].attack`, 15, 320), ...textErrors(x?.answer, `${at}.survived[${j}].answer`, 15, 320)));
-      if (!Array.isArray(s.uncertain) || s.uncertain.length < 1 || s.uncertain.length > 5) errors.push(`${at}.uncertain: one to five things nobody could test; an idea with nothing uncertain was not examined`);
-      else s.uncertain.forEach((x, j) => errors.push(...textErrors(x, `${at}.uncertain[${j}]`, 15, 320)));
+      errors.push(...attackAnswerErrors(s, at));
     }
     if (s.needs !== undefined && (!Array.isArray(s.needs) || s.needs.length > 5)) errors.push(`${at}.needs: at most five things (access, content, a decision)`);
     else (s.needs ?? []).forEach((x, j) => errors.push(...textErrors(x, `${at}.needs[${j}]`, 5, 200)));
@@ -236,7 +260,9 @@ export function validateSuggestions(doc, model, { strict = true } = {}) {
     if (s.fromYou === undefined) { if (strict) errors.push(`${at}.fromYou: what this idea needs from the owner (a decision, a sign-off, a fact only they know), up to three points; [] when it needs nothing from them`); }
     else if (!Array.isArray(s.fromYou) || s.fromYou.length > 3) errors.push(`${at}.fromYou: up to three points, [] when it needs nothing from the owner`);
     else s.fromYou.forEach((x, j) => errors.push(...textErrors(x, `${at}.fromYou[${j}]`, 10, 200)));
-    const keys = lab ? ['idea', ...Object.keys(LAB_SURVIVOR_TEXTS), 'pressRelease', 'faq', 'needs', 'fromYou'] : ['idea', ...Object.keys(SURVIVOR_TEXTS), 'survived', 'uncertain', 'needs', 'fromYou', 'fitsWith'];
+    const keys = kind === 'venture' ? ['idea', ...Object.keys(VENTURE_SURVIVOR_TEXTS), 'pressRelease', 'faq', 'needs', 'fromYou']
+      : kind === 'lab' ? ['idea', ...Object.keys(INVENTION_TEXTS), 'experience', 'survived', 'uncertain', 'needs', 'fromYou', 'fitsWith']
+        : ['idea', ...Object.keys(SURVIVOR_TEXTS), 'survived', 'uncertain', 'needs', 'fromYou', 'fitsWith'];
     for (const key of Object.keys(s)) if (!keys.includes(key)) errors.push(`${at}: unknown property "${key}"`);
 
     // A survivor may also draw on the set notes that name it.

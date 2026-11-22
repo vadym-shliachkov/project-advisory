@@ -355,7 +355,24 @@ ${scenes}
 </article>`;
 }
 
+// The minutes are set in a room of their own: the council's in the library of a country house, the invention lab's in
+// the workshop of a society of inventors. The headings the script prints speak in the same room.
+const VOICES = {
+  council: {
+    eyebrow: 'Minutes of the library', question: 'The question before the house', brief: 'The evening in brief', sum: 'The evening in sum', sumLead: 'Every idea that was heard, in the order of the chapters, with what became of it.',
+    rises: 'The house rises', before: 'Still before the house', nobody: 'Questions nobody in the room could answer', notAdmitted: 'Not admitted to the table', title: 'Council · The discussion',
+    note: 'These minutes are an edit of the record of a council session. Each character speaks for one seat at the table; the characters are invented, and what they say is what was said from that seat. Facts and numbers are those of the record.',
+  },
+  lab: {
+    eyebrow: 'Minutes of the Society', question: 'The question before the Society', brief: 'The night in brief', sum: 'The night in sum', sumLead: 'Every invention that was brought to the bench, in the order of the chapters, with what became of it.',
+    rises: 'The Society adjourns', before: 'Still on the bench', nobody: 'Questions nobody in the workshop could answer', notAdmitted: 'Not brought to the bench', title: 'Invention lab · The discussion',
+    note: 'These minutes are an edit of the record of an invention lab session. Each member of the Society speaks for one seat at the bench; the members are invented, and what they say is what was said from that seat. Facts and numbers are those of the record.',
+  },
+};
+export const voiceOf = (model) => VOICES[model.session.kind] ?? VOICES.council;
+
 export function buildDiscussionHtml({ model, discussion, parts = () => [] }) {
+  const v = voiceOf(model);
   const usedEvidence = new Set();
   const ordered = discussion.chapters.filter((c) => model.ideas.some((i) => i.thread === c.thread));
   // In the minutes an idea is "chapter IV": short enough to stand inside a sentence, and the reader can turn to it.
@@ -365,25 +382,25 @@ export function buildDiscussionHtml({ model, discussion, parts = () => [] }) {
   const present = model.cast.map((s) => `<tr><td><b>${esc(s.name)}</b></td><td>${esc(s.title)}</td><td>${esc(s.temper ?? '')}</td></tr>`);
 
   const first = `<section class="glance">
-<p class="eyebrow">Minutes of the library</p>
+<p class="eyebrow">${esc(v.eyebrow)}</p>
 <h2 class="evening">${esc(discussion.title)}</h2>
-<p class="goal-line"><b>The question before the house:</b> ${esc(model.session.goal)}</p>
+<p class="goal-line"><b>${esc(v.question)}:</b> ${esc(model.session.goal)}</p>
 <div class="opening">${paras(discussion.opening)}</div>
-<p class="note">These minutes are an edit of the record of a council session. Each character speaks for one seat at the table; the characters are invented, and what they say is what was said from that seat. Facts and numbers are those of the record.</p>
+<p class="note">${esc(v.note)}</p>
 </section>`;
 
   // The front gives the outcome in a few lines; the idea-by-idea list is the résumé at the end, after the story.
-  const brief = `<section class="brief"><h2>The evening in brief</h2>
+  const brief = `<section class="brief"><h2>${esc(v.brief)}</h2>
 ${countChips(model)}
 ${discussion.brief ? `<div class="opening brief-text">${paras(plain(discussion.brief))}</div>` : ''}
 <h3>Present</h3>
 ${table('present', ['Name', 'Seat', 'Manner'], present)}
 </section>`;
 
-  const resume = `<section class="resume"><h2>The evening in sum</h2>
-<p class="lead">Every idea that was heard, in the order of the chapters, with what became of it.</p>
+  const resume = `<section class="resume"><h2>${esc(v.sum)}</h2>
+<p class="lead">${esc(v.sumLead)}</p>
 ${table('brief-table', ['Chapter', 'The idea', 'Proposed by', 'Verdict'], ordered.map((c, i) => { const idea = ideaOf(c.thread); return `<tr><td class="no">${roman(i + 1)}</td><td><b>${esc(idea.originalTitle)}</b><span class="sub">${rich(c.line)}</span></td><td>${esc(idea.proposer.name)}<span class="sub">${esc(idea.proposer.title)}</span></td><td>${stamp(idea.verdict)}</td></tr>`; }))}
-${model.refused.length || model.merged.length ? `<h3>Not admitted to the table</h3>${table('refused', ['Idea', 'Why'], [...model.refused.map((x) => `<tr><td>${esc(x.title)}</td><td>${rich(x.reason)}</td></tr>`), ...model.merged.map((x) => `<tr><td>${esc(x.title)}</td><td>The same idea as “${esc(x.into)}”, and debated with it.</td></tr>`)])}` : ''}
+${model.refused.length || model.merged.length ? `<h3>${esc(v.notAdmitted)}</h3>${table('refused', ['Idea', 'Why'], [...model.refused.map((x) => `<tr><td>${esc(x.title)}</td><td>${rich(x.reason)}</td></tr>`), ...model.merged.map((x) => `<tr><td>${esc(x.title)}</td><td>The same idea as “${esc(x.into)}”, and debated with it.</td></tr>`)])}` : ''}
 </section>`;
 
   const memoriam = model.killed.length ? `<section class="memoriam"><h2>In memoriam</h2>
@@ -391,12 +408,12 @@ ${discussion.memoriam ? `<div class="opening">${paras(discussion.memoriam)}</div
 ${table('killed', ['Idea', 'Cause of death'], model.killed.map((i) => `<tr><td><b>${esc(i.originalTitle)}</b></td><td>${rich(plain(i.ruling.causeOfDeath))}</td></tr>`))}
 </section>` : '';
 
-  const before = model.undecided.length || model.questions.length ? `<section class="before"><h2>Still before the house</h2>
+  const before = model.undecided.length || model.questions.length ? `<section class="before"><h2>${esc(v.before)}</h2>
 ${model.undecided.length ? table('undecided', ['Undecided', 'What would decide it'], model.undecided.map((i) => `<tr><td><b>${esc(i.originalTitle)}</b></td><td>${rich(plain(i.ruling.wouldDecide))}</td></tr>`)) : ''}
-${model.questions.length ? `<h3>Questions nobody in the room could answer</h3><ol class="questions">${model.questions.map((q) => `<li>${rich(plain(q.text))} <span class="sub">Raised on “${esc(model.ideas.find((i) => i.thread === q.thread)?.originalTitle ?? q.idea)}”.</span></li>`).join('')}</ol>` : ''}
+${model.questions.length ? `<h3>${esc(v.nobody)}</h3><ol class="questions">${model.questions.map((q) => `<li>${rich(plain(q.text))} <span class="sub">Raised on “${esc(model.ideas.find((i) => i.thread === q.thread)?.originalTitle ?? q.idea)}”.</span></li>`).join('')}</ol>` : ''}
 </section>` : '';
 
-  const closing = `<section class="closing"><h2>The house rises</h2><div class="opening">${paras(discussion.closing)}</div></section>`;
+  const closing = `<section class="closing"><h2>${esc(v.rises)}</h2><div class="opening">${paras(discussion.closing)}</div></section>`;
 
   const cited = model.ideas.flatMap((i) => i.evidence).filter((e, i, all) => usedEvidence.has(e.id) && all.findIndex((x) => x.id === e.id) === i).sort((a, b) => Number(a.id.slice(1)) - Number(b.id.slice(1)));
   const appendix = cited.length ? `<section class="appendix"><h2>The evidence cited</h2>
@@ -404,5 +421,5 @@ ${model.questions.length ? `<h3>Questions nobody in the room could answer</h3><o
 ${table('evidence-table', ['No.', 'What was seen or measured', 'Source'], cited.map((e) => `<tr><td class="ev-id">${esc(e.id)}</td><td>${esc(plain(evidenceText(e)))}</td><td class="ev-src">${esc(e.grade)}${e.source ? `<br>${sourceLink(e.source)}` : ''}</td></tr>`))}
 </section>` : '';
 
-  return page({ title: 'Council · The discussion', kind: 'discussion', model, body: [first, brief, `<section class="chapters">${chapters}</section>`, memoriam, before, closing, resume, appendix].join('\n') });
+  return page({ title: v.title, kind: 'discussion', model, body: [first, brief, `<section class="chapters">${chapters}</section>`, memoriam, before, closing, resume, appendix].join('\n') });
 }

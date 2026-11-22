@@ -1,14 +1,16 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { projectDir } from './paths.mjs';
+import { projectDir, KINDS, labelOf as kindLabel } from './paths.mjs';
 import { today } from './bank.mjs';
 import { loadIdeas } from './ideas.mjs';
 import { brandOf, shownSource } from './documents.mjs';
 import { ATTACK_KINDS } from './record.mjs';
-import { esc, rich, paras, page, css, readerText, stamp, tag, table, evidenceText, sourceLink, methodSection, ideaArticle, chapterHtml, whereBlock, longDate, roman, STRENGTH_NOTE, SCALE_NOTE } from './html.mjs';
+import { LAB_ATTACK_KINDS } from './invention.mjs';
+import { esc, rich, paras, page, css, readerText, stamp, tag, table, evidenceText, sourceLink, methodSection, ideaArticle, chapterHtml, whereBlock, longDate, roman, STRENGTH_NOTE, SCALE_NOTE, voiceOf } from './html.mjs';
 import { briefSections, namer, ideaTags, killedRows, labelOf } from './brief.mjs';
-import { betArticle, originLine } from './labdoc.mjs';
-import { loadCards } from './lab.mjs';
+import { betArticle, originLine } from './venturedoc.mjs';
+import { inventionArticle, anatomySection, frameSection } from './inventdoc.mjs';
+import { loadCards } from './frame.mjs';
 
 // The session as linked pages, in `<session>/site/`: the brief and a table of every idea on the first page, one page
 // per idea (the full write-up of a survivor, the analysis of a killed idea, the plain record of its debate and the
@@ -25,7 +27,7 @@ const STATEMENT = {
   hypothesis: () => 'Proposed',
   steelman: () => 'Restated at its strongest',
   'steelman-reply': (s) => (s.accepts ? 'The restatement accepted' : 'The restatement corrected'),
-  attack: (s) => `Attack: ${ATTACK_KINDS[s.kind] ?? s.kind}`,
+  attack: (s) => `Attack: ${ATTACK_KINDS[s.kind] ?? LAB_ATTACK_KINDS[s.kind] ?? s.kind}`,
   client: (s) => `The customer's voice: ${({ yes: 'would care', no: 'would not care', unsure: 'not sure a customer would care' })[s.cares] ?? s.cares}`,
   reply: (s) => `Reply: ${({ refute: 'refuted', narrow: 'narrowed the idea', concede: 'conceded' })[s.stance] ?? s.stance}`,
   question: (s) => `Question for ${s.for === 'data' ? 'the data' : 'the person'}`,
@@ -46,7 +48,7 @@ function linked(text, { up, evidenceIds, threadPage }) {
     .replace(/\bT(\d{1,3})\b/g, (m) => (threadPage(m) ? `<a href="${up}${threadPage(m)}">${m}</a>` : m));
 }
 
-export function buildSite({ ctx, root, frame = null, model, suggestions, discussion = null, picture = () => null, parts = () => [] }) {
+export function buildSite({ ctx, root, frame = null, model, suggestions, discussion = null, picture = () => null, parts = () => [], anatomy = null, genre = null, sketches = [] }) {
   const { dir, session, evidence } = ctx;
   const out = path.join(dir, SITE);
   fs.rmSync(out, { recursive: true, force: true });
@@ -68,7 +70,8 @@ export function buildSite({ ctx, root, frame = null, model, suggestions, discuss
   const partsAt = (up) => (thread) => parts(thread).map((p) => ({ ...p, file: fromSession(up, p.file) }));
   const pictureAt = (up) => (url) => { const pic = picture(url); return pic ? { ...pic, src: fromSession(up, pic.src) } : null; };
   const label = labelOf(model);
-  const cards = model.session.kind === 'lab' ? loadCards() : [];
+  const cards = ['venture', 'lab'].includes(model.session.kind) ? loadCards(model.session.kind) : [];
+  const voice = voiceOf(model);
   const shell = (up, current, title, body, kind = 'site') => page({ title: `${title} · ${label} ${session.id}`, bandTitle: title, kind, model, body, stylesheet: `${up}style.css`, nav: nav(up, current, { discussion: chapters.length }) });
   const files = [];
   const put = (rel, html) => { write(path.join(out, rel), html); files.push(rel); };
@@ -141,7 +144,9 @@ ${model.refused.length || model.merged.length ? `<h3>Not debated</h3>${table('re
     const n = chapterNo(idea.thread);
     const debate = n ? `<p><a href="${up}discussion/${n}.html">Chapter ${roman(n)} of the discussion</a> tells the debate on this idea as a conversation; the plain record of what was said is below.</p>` : '';
     let body;
-    if (written.has(idea.id) && idea.bet) {
+    if (written.has(idea.id) && idea.invention) {
+      body = inventionArticle(idea, written.get(idea.id), numberOf.get(idea.id), { frame, cards, parts: partsAt(up), plain, anatomy, sketches });
+    } else if (written.has(idea.id) && idea.bet) {
       body = betArticle(idea, written.get(idea.id), numberOf.get(idea.id), { frame, cards, parts: partsAt(up), plain });
     } else if (written.has(idea.id)) {
       body = ideaArticle(model, idea, written.get(idea.id), numberOf.get(idea.id), n, plain, pictureAt(up), partsAt(up));
@@ -198,19 +203,19 @@ ${pager}`;
     const chapterPlain = (text) => readerText(text, (id) => { const at = chapters.findIndex((c) => c.thread === id); return at >= 0 ? `chapter ${roman(at + 1)}` : null; });
     const list = chapters.map((c, i) => { const idea = model.ideas.find((x) => x.thread === c.thread); return `<tr><td class="no">${roman(i + 1)}</td><td><a class="idea-link" href="${i + 1}.html">${esc(idea.originalTitle)}</a><span class="sub">${rich(c.line)}</span></td><td>${stamp(idea.verdict)}</td></tr>`; });
     put('discussion/index.html', shell(up, 'discussion/index.html', `${label} · The discussion`, `<section class="glance">
-<p class="eyebrow">Minutes of the library</p>
+<p class="eyebrow">${esc(voice.eyebrow)}</p>
 <h2 class="evening">${esc(discussion.title)}</h2>
-<p class="goal-line"><b>The question before the house:</b> ${esc(model.session.goal)}</p>
+<p class="goal-line"><b>${esc(voice.question)}:</b> ${esc(model.session.goal)}</p>
 <div class="opening">${paras(discussion.opening)}</div>
-<p class="note">These minutes are an edit of the record of a council session. The characters are invented; what they say is what was said from their seat. Each idea's own page has the plain record.</p>
+<p class="note">${esc(voice.note)} Each idea's own page has the plain record.</p>
 </section>
 <section class="b-part"><h2>The chapters</h2>${table('brief-table', ['Chapter', 'The idea', 'Verdict'], list)}</section>
-<section class="b-part"><h2>The house rises</h2><div class="opening">${paras(discussion.closing)}</div></section>`, 'site discussion'));
+<section class="b-part"><h2>${esc(voice.rises)}</h2><div class="opening">${paras(discussion.closing)}</div></section>`, 'site discussion'));
     chapters.forEach((c, i) => {
       const idea = model.ideas.find((x) => x.thread === c.thread);
       const html = chapterHtml(model, c, i + 1, used, chapterPlain, partsAt(up))
         .replace(/<p class="cites">Evidence: ([^<]+)<\/p>/g, (m, ids) => `<p class="cites">Evidence: ${ids.split(/,\s*/).map((id) => (evidenceIds.has(id) ? `<a href="${up}evidence.html#${id}">${id}</a>` : id)).join(', ')}</p>`);
-      const pager = `<nav class="pager" aria-label="Chapters">${i ? `<a href="${i}.html" rel="prev">Chapter ${roman(i)}</a>` : '<a href="index.html">The opening</a>'}${chapters[i + 1] ? `<a href="${i + 2}.html" rel="next">Chapter ${roman(i + 2)}</a>` : '<a href="index.html">The house rises</a>'}</nav>`;
+      const pager = `<nav class="pager" aria-label="Chapters">${i ? `<a href="${i}.html" rel="prev">Chapter ${roman(i)}</a>` : '<a href="index.html">The opening</a>'}${chapters[i + 1] ? `<a href="${i + 2}.html" rel="next">Chapter ${roman(i + 2)}</a>` : `<a href="index.html">${esc(voice.rises)}</a>`}</nav>`;
       put(`discussion/${i + 1}.html`, shell(up, null, `Chapter ${roman(i + 1)}`, `<p class="crumb"><a href="${up}${ideaFile(idea)}">This idea's own page</a>: its write-up, the plain record and the evidence.</p>\n${html}\n${pager}`, 'site discussion'));
     });
   }
@@ -224,7 +229,9 @@ ${pager}`;
   // ---- The method ----
   const key = `<h4>How well an idea is supported</h4>${table('key', ['Support', 'What it means'], Object.entries(STRENGTH_NOTE).map(([k, v]) => `<tr><td>${tag(k, k)}</td><td>${esc(v)}</td></tr>`))}
 <h4>How far an idea reaches</h4>${table('key', ['Scale', 'What it means'], Object.entries(SCALE_NOTE).map(([k, v]) => `<tr><td>${tag(k, `scale-${k}`)}</td><td>${esc(v)}</td></tr>`))}`;
-  put('method.html', shell('', 'method.html', `${label} · Method`, methodSection(model, key), 'site suggestions'));
+  // The lab's method page also shows what it understood about the thing, and the frame it worked from.
+  const understood = model.session.kind === 'lab' ? `${anatomySection(anatomy, genre, model)}\n${frameSection(frame, model, plain)}` : '';
+  put('method.html', shell('', 'method.html', `${label} · Method`, `${understood}\n${methodSection(model, key)}`, 'site suggestions'));
 
   const history = buildHistory(root);
   return { dir: out, index: path.join(out, 'index.html'), pages: files.length, history };
@@ -234,7 +241,7 @@ ${pager}`;
 
 const SESSION_RE = /^\d{4}-\d{2}-\d{2}(-\d+)?$/;
 function sessionsOf(root) {
-  return ['council', 'lab'].flatMap((skill) => {
+  return KINDS.flatMap((skill) => {
     const base = path.join(projectDir(root), skill);
     if (!fs.existsSync(base)) return [];
     return fs.readdirSync(base).filter((d) => SESSION_RE.test(d) && fs.existsSync(path.join(base, d, 'session.json'))).map((id) => ({ skill, id }));
@@ -260,14 +267,14 @@ export function buildHistory(root, { date = today() } = {}) {
     const link = pageOf(idea);
     const title = link ? `<a class="idea-link" href="${esc(link)}">${esc(idea.title)}</a>` : `<b>${esc(idea.title)}</b>`;
     const timeline = `<details><summary>${idea.history.length} ${idea.history.length === 1 ? 'event' : 'events'}</summary><ol class="timeline">${idea.history.map((h) => `<li>${esc(h.date)}: ${esc(STATUS_WORD[h.event] ?? h.event)}${h.by ? ` (${esc(h.by)})` : ''}${h.note ? `: ${esc(h.note)}` : ''}</li>`).join('')}</ol></details>`;
-    return `<tr><td class="no">${esc(idea.id)}</td><td>${title}${idea.parent ? `<span class="sub">A smaller form of ${esc(idea.parent)}</span>` : ''}</td><td>${esc(STATUS_WORD[idea.status] ?? idea.status)}</td><td>${s ? `${esc(s.skill === 'lab' ? 'Invention lab' : 'Council')}, ${esc(longDate(s.id))}` : ''}</td><td>${timeline}</td></tr>`;
+    return `<tr><td class="no">${esc(idea.id)}</td><td>${title}${idea.parent ? `<span class="sub">A smaller form of ${esc(idea.parent)}</span>` : ''}</td><td>${esc(STATUS_WORD[idea.status] ?? idea.status)}</td><td>${s ? `${esc(kindLabel(s.skill))}, ${esc(longDate(s.id))}` : ''}</td><td>${timeline}</td></tr>`;
   };
   const head = ['Idea', 'Title', 'Status', 'From', 'History'];
   const recent = ideas.filter(changedLatest);
   const rest = ideas.filter((i) => !changedLatest(i));
-  const list = sessions.length ? `<ul>${[...sessions].reverse().map((s) => { const rel = `${s.skill}/${s.id}/${SITE}/index.html`; const has = fs.existsSync(path.join(projectDir(root), rel)); return `<li>${has ? `<a href="${esc(rel)}">` : ''}${esc(s.skill === 'lab' ? 'Invention lab' : 'Council')}, ${esc(longDate(s.id))}${has ? '</a>' : ''}</li>`; }).join('')}</ul>` : '<p>No session yet.</p>';
-  const body = `<section class="glance"><p class="eyebrow">Every session</p><p class="goal">Every idea the council and the invention lab have looked at, and what became of it.</p></section>
-${recent.length ? `<section class="b-part"><h2>Changed in the latest session</h2><p class="lead">${esc(latest.skill === 'lab' ? 'The invention lab' : 'The council')}, ${esc(longDate(latest.id))}.</p><div class="table-box">${table('history', head, recent.map(row))}</div></section>` : ''}
+  const list = sessions.length ? `<ul>${[...sessions].reverse().map((s) => { const rel = `${s.skill}/${s.id}/${SITE}/index.html`; const has = fs.existsSync(path.join(projectDir(root), rel)); return `<li>${has ? `<a href="${esc(rel)}">` : ''}${esc(kindLabel(s.skill))}, ${esc(longDate(s.id))}${has ? '</a>' : ''}</li>`; }).join('')}</ul>` : '<p>No session yet.</p>';
+  const body = `<section class="glance"><p class="eyebrow">Every session</p><p class="goal">Every idea the council, the venture board and the invention lab have looked at, and what became of it.</p></section>
+${recent.length ? `<section class="b-part"><h2>Changed in the latest session</h2><p class="lead">${esc(kindLabel(latest.skill))}, ${esc(longDate(latest.id))}.</p><div class="table-box">${table('history', head, recent.map(row))}</div></section>` : ''}
 <section class="b-part"><h2>${recent.length ? 'All the other ideas' : 'All ideas'}</h2>${rest.length ? `<div class="table-box">${table('history', head, rest.map(row))}</div>` : '<p class="lead">None.</p>'}</section>
 <section class="b-part"><h2>The sessions</h2>${list}</section>`;
   const file = path.join(projectDir(root), 'ideas.html');

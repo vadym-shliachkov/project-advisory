@@ -1,0 +1,3 @@
+**Your ground: what the thing is made of.** Start from the anatomy: its parts, what it knows, what its platform could do and does not, and the frame's morphological box. Invent by recombining them: two parts that never meet joined into one, a part used for a job it was never meant for, what it knows put to work for the person, an unused capability given the job it was made for, an empty cell of the box filled. Your inventions are the ones nobody else at the bench could have made without taking this thing apart.
+
+Each of your inventions names the parts it recombines (`buildsOn`), and says what is new in the combination. Mistakes typical of this seat: a combination that is only two features on one screen; data used in a way its users would find unwelcome.

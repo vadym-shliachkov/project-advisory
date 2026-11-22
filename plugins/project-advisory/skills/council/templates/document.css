@@ -326,7 +326,7 @@ body.decision-brief { page: brief; }
 .decision-brief .start { break-inside: auto; }
 .decision-brief .start li { break-inside: avoid; }
 /* A heading and its lead stay with the first idea under them. */
-.b-part > .lead { break-after: avoid; }
+.b-part > .lead { break-after: avoid; break-inside: avoid; }
 .b-part { margin-top: var(--sp-6); }
 .b-part > h2 { font-size: var(--t-xl); }
 .b-idea { margin: 0 0 var(--sp-4); padding-top: var(--sp-3); border-top: 1px solid var(--line); max-width: 178mm; break-inside: avoid; }
@@ -343,3 +343,34 @@ body.decision-brief { page: brief; }
 /* In the bets a bet runs on after the one before; its last line stays with it. */
 .bets-doc .idea + .idea { break-before: auto; margin-top: var(--sp-7); padding-top: var(--sp-5); border-top: 1px solid var(--line); }
 .bets-doc .idea-foot, .bets-doc .faq { break-before: avoid; }
+
+/* ---- The invention lab: inventions, their sketches, what the lab understood ---- */
+.tag-scale-remake { background: var(--accent); color: #ffffff; }
+.tag-scale-product { background: none; color: var(--accent); border: 0.75pt solid var(--accent); }
+.tag-scale-feature { background: none; color: var(--ink); border: 0.75pt solid var(--line); }
+.tag-new-world { background: var(--good-soft); color: var(--good); font-weight: 600; }
+.tag-new-category { background: var(--good-soft); color: var(--good); }
+.tag-new-here { background: var(--bad-soft); color: var(--bad); }
+.tag-feasible-now { background: var(--good-soft); color: var(--good); }
+.tag-feasible-stretch { background: var(--check-soft); color: var(--check); }
+.tag-feasible-research { background: var(--warn-soft); color: var(--warn); }
+.tag-used { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+.sketch { margin: var(--sp-3) 0 var(--sp-4); max-width: 170mm; break-inside: avoid; }
+.sketch-screen { border: 1px solid var(--line); border-radius: var(--radius); background: #ffffff; padding: var(--sp-2); }
+.sketch-screen svg { display: block; width: 100%; height: auto; max-height: 85mm; }
+.sketch pre { margin: 0; padding: var(--sp-3) var(--sp-4); border-radius: var(--radius); font-family: ui-monospace, "SFMono-Regular", Consolas, "Liberation Mono", monospace; font-size: 8.5pt; line-height: 1.5; white-space: pre-wrap; overflow-wrap: anywhere; }
+.sketch pre.sketch-terminal { background: #111827; color: #e5e7eb; }
+.sketch pre.sketch-code { background: var(--surface); color: var(--ink); border: 1px solid var(--line); }
+.sketch figcaption { margin-top: var(--sp-1); font-size: var(--t-xs); color: var(--muted); }
+ol.experience { padding-left: 16pt; max-width: var(--prose); }
+ol.experience li { margin-bottom: var(--sp-1); }
+dl.survived dt { font-weight: 600; color: var(--ink); margin-top: var(--sp-2); }
+dl.survived dd { margin: 2pt 0 0; }
+.anatomy table.parts td:last-child { font-size: var(--t-xs); overflow-wrap: anywhere; }
+table.morphology td:first-child { width: 32%; }
+/* In the inventions an invention runs on after the one before, as the bets do. */
+.inventions-doc .idea + .idea { break-before: auto; margin-top: var(--sp-7); padding-top: var(--sp-5); border-top: 1px solid var(--line); }
+.inventions-doc .idea-foot { break-before: avoid; }
+.inventions-doc section > .lead { break-after: avoid; break-inside: avoid; }
+.inventions-doc .method > .meta:last-child { break-before: avoid; }
+.inventions-doc table.key { break-inside: avoid; }

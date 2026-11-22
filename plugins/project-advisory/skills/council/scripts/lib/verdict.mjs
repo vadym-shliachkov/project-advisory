@@ -1,7 +1,9 @@
 import path from 'node:path';
 import { readJson, writeJson } from './io.mjs';
-import { takeTurn, isLab } from './session.mjs';
-import { UPSIDES, LAB_SCALES } from './lab.mjs';
+import { takeTurn, isLab, isVenture, isFramed } from './session.mjs';
+import { UPSIDES, VENTURE_SCALES } from './frame.mjs';
+import { labRulingErrors, LAB_SCALES } from './invention.mjs';
+import { kindOf } from './paths.mjs';
 import { thread, inThread, testErrors, whereErrors, cleanWhere, SCALES } from './record.mjs';
 import { applyIdeas } from './ideas.mjs';
 
@@ -81,7 +83,8 @@ function rulingErrors(r, at, ctx) {
       // The smaller idea is the one that will be tested, so it may carry the test and the kill condition that read it.
       if (r.narrowed.killCondition !== undefined) errors.push(...textError(r.narrowed.killCondition, `${at}.narrowed.killCondition`, 10, 400));
       // A direction narrowed to its first page is an addition or an adjustment now; the documents say how far it reaches.
-      if (r.narrowed.scale !== undefined && !SCALES.includes(r.narrowed.scale)) errors.push(`${at}.narrowed.scale: ${SCALES.join(', ')}`);
+      const scales = isLab(ctx.session) ? LAB_SCALES : SCALES;
+      if (r.narrowed.scale !== undefined && !scales.includes(r.narrowed.scale)) errors.push(`${at}.narrowed.scale: ${scales.join(', ')}`);
       // A smaller form that moved to another page, or to one part of it, says where it is now; otherwise it keeps the
       // places of the idea as proposed.
       errors.push(...whereErrors(r.narrowed.where, `${at}.narrowed.where`));
@@ -92,15 +95,17 @@ function rulingErrors(r, at, ctx) {
   }
   if (r.verdict === 'killed') errors.push(...textError(r.causeOfDeath, `${at}.causeOfDeath`, 10, CAUSE_MAX).map((e) => `${e}: the cause of death, in one line`));
   if (r.verdict === 'undecided') errors.push(...textError(r.wouldDecide, `${at}.wouldDecide`, 10, 400).map((e) => `${e}: the number, the access or the answer that would decide it`));
-  if (isLab(ctx.session) && r.verdict !== 'killed') {
-    if (!UPSIDES.includes(r.upside)) errors.push(`${at}.upside: what the bet is worth if it works: ${UPSIDES.join(', ')}`);
+  if (isFramed(ctx.session) && r.verdict !== 'killed') {
+    if (!UPSIDES.includes(r.upside)) errors.push(`${at}.upside: what it is worth if it works: ${UPSIDES.join(', ')}`);
     errors.push(...textError(r.riskiest, `${at}.riskiest`, 10, 300).map((e) => `${e}: the assumption most likely to be false, after the debate, in words for the reader`), ...readerErrors(r.riskiest, `${at}.riskiest`));
-    if (r.verdict === 'narrowed' && r.narrowed?.scale !== undefined && !LAB_SCALES.includes(r.narrowed.scale)) errors.push(`${at}.narrowed.scale: a bet stays new or a direction; the lab does not narrow a bet into an edit of the site`);
+    if (isVenture(ctx.session) && r.verdict === 'narrowed' && r.narrowed?.scale !== undefined && !VENTURE_SCALES.includes(r.narrowed.scale)) errors.push(`${at}.narrowed.scale: a bet stays new or a direction; the venture board does not narrow a bet into an edit of the site`);
   }
-  // A bet that fell, or was cut down, for reaching further than the council can test is worth the invention lab's time.
-  if (r.labCandidate !== undefined) {
-    if (typeof r.labCandidate !== 'boolean') errors.push(`${at}.labCandidate: true or false`);
-    else if (r.labCandidate && r.verdict === 'survived') errors.push(`${at}.labCandidate: only an idea killed, left undecided or narrowed goes to the invention lab`);
+  if (isLab(ctx.session)) errors.push(...labRulingErrors(r, at));
+  // A bet that fell, or was cut down, for reaching further than the council can test is worth the venture board's time.
+  if (r.ventureCandidate !== undefined) {
+    if (isFramed(ctx.session)) errors.push(`${at}.ventureCandidate: only the council hands bets to the venture board`);
+    else if (typeof r.ventureCandidate !== 'boolean') errors.push(`${at}.ventureCandidate: true or false`);
+    else if (r.ventureCandidate && r.verdict === 'survived') errors.push(`${at}.ventureCandidate: only an idea killed, left undecided or narrowed goes to the venture board`);
   }
   errors.push(...readerErrorsIn({
     ...(lived(r) ? { vsDoNothing: r.vsDoNothing } : {}),
@@ -126,8 +131,9 @@ const clean = (r) => ({
   } } : {}),
   ...(r.verdict === 'killed' || (r.verdict === 'narrowed' && r.causeOfDeath) ? { causeOfDeath: one(r.causeOfDeath) } : {}),
   ...(r.verdict === 'undecided' ? { wouldDecide: one(r.wouldDecide) } : {}),
-  ...(r.labCandidate && r.verdict !== 'survived' ? { labCandidate: true } : {}),
+  ...(r.ventureCandidate && r.verdict !== 'survived' ? { ventureCandidate: true } : {}),
   ...(r.upside ? { upside: r.upside } : {}), ...(r.riskiest ? { riskiest: one(r.riskiest) } : {}),
+  ...(r.newTo ? { newTo: r.newTo } : {}), ...(r.feasible && r.verdict !== 'killed' && r.verdict !== 'undecided' ? { feasible: r.feasible } : {}),
 });
 
 function addToRecord(record, entry) {
@@ -243,7 +249,7 @@ export function saveSetChanges(ctx, data) {
 export function finalise(ctx, { ideas, date } = {}) {
   const { session, record, verdicts } = ctx;
   if (verdicts.final) return { errors: [], ideas };
-  const by = { by: 'council', session: session.id, date };
+  const by = { by: kindOf(session), session: session.id, date };
   const ideaOf = (id) => thread(record, id).ideaId;
   const narrowed = verdicts.rulings.filter((r) => r.verdict === 'narrowed');
   // The child is the idea that will be tested, so it must not go into the ledger with a test the debate has already
@@ -273,11 +279,11 @@ export function finalise(ctx, { ideas, date } = {}) {
     r.narrowed = { ...r.narrowed, ...(child.test ? { test: child.test } : {}), killCondition: child.hypothesis.killCondition };
   });
 
-  const verdict = (r) => ({ session: session.id, ...(r.strength ? { strength: r.strength, vsDoNothing: r.vsDoNothing } : {}), ...(r.upside ? { upside: r.upside } : {}), ...(r.riskiest ? { riskiest: r.riskiest } : {}) });
+  const verdict = (r) => ({ session: session.id, ...(r.strength ? { strength: r.strength, vsDoNothing: r.vsDoNothing } : {}), ...(r.upside ? { upside: r.upside } : {}), ...(r.riskiest ? { riskiest: r.riskiest } : {}), ...(r.newTo ? { newTo: r.newTo } : {}), ...(r.feasible ? { feasible: r.feasible } : {}) });
   const moves = verdicts.rulings.flatMap((r) => {
     const id = ideaOf(r.thread);
     if (r.verdict === 'survived') return [{ id, status: 'survived', verdict: verdict(r) }];
-    const lab = r.labCandidate ? { labCandidate: true } : {};
+    const lab = r.ventureCandidate ? { ventureCandidate: true } : {};
     if (r.verdict === 'killed') return [{ id, status: 'killed', verdict: { session: session.id, causeOfDeath: r.causeOfDeath }, ...lab }];
     if (r.verdict === 'undecided') return [{ id, status: 'undecided', verdict: { session: session.id, wouldDecide: r.wouldDecide, ...(r.upside ? { upside: r.upside } : {}), ...(r.riskiest ? { riskiest: r.riskiest } : {}) }, ...lab }];
     return [

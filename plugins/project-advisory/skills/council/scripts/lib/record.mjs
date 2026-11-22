@@ -1,8 +1,11 @@
 import path from 'node:path';
 import { readJson, writeJson } from './io.mjs';
-import { maxRounds, isLab, debateAllowance, proposers, seat, takeTurn, turnTaken } from './session.mjs';
+import { maxRounds, isLab, isVenture, isFramed, debateAllowance, proposers, seat, takeTurn, turnTaken } from './session.mjs';
 import { applyIdeas } from './ideas.mjs';
-import { loadFrame, betErrors, cleanBet, assignAmplifiers, deal } from './lab.mjs';
+import { loadFrame, betErrors, cleanBet, assignAmplifiers, deal } from './frame.mjs';
+import { inventionErrors, cleanInvention, LAB_SCALES, LAB_ATTACK_KINDS } from './invention.mjs';
+import { loadAnatomy } from './anatomy.mjs';
+import { kindOf } from './paths.mjs';
 import { survivors, finalise } from './verdict.mjs';
 
 // The record of a session: every hypothesis, restatement, attack, reply and ruling, numbered in the order it was
@@ -21,6 +24,8 @@ export const ATTACK_KINDS = {
   harm: 'it harms something else',
   'do-nothing': 'leaving things as they are does as well',
 };
+// The invention lab attacks with one kind more: the thing, as it is built, cannot do it.
+export const attackKinds = (session) => (isLab(session) ? LAB_ATTACK_KINDS : ATTACK_KINDS);
 const STANCES = ['refute', 'narrow', 'concede'];
 const HYPOTHESIS_PARTS = ['change', 'effect', 'because', 'trigger', 'killCondition'];
 const TEST_PARTS = ['what', 'metric', 'threshold', 'checkAfter'];
@@ -185,8 +190,9 @@ export function threadsFor(session, record, role) {
   if (session.phase !== 'examine') return [];
   if (session.step === 'attack') {
     if (role === 'red-team') return open;
-    // In the lab only the sceptic and the customer's voice attack: the seats built on each other's bets instead.
-    if (isLab(session) && role !== 'client') return [];
+    // In the venture board only the sceptic and the customer's voice attack: the seats built on each other's bets
+    // instead. The invention lab debates as the council does: every seat attacks in the first round.
+    if (isVenture(session) && role !== 'client') return [];
     if (session.round > 1) return [];
     if (role === 'client') return open.filter((t) => t.by !== 'client');
     if (!proposers(session).includes(role)) return [];
@@ -202,7 +208,19 @@ export function turns(session, record, verdicts = null) {
     const s = seat(session, role);
     list.push({ role, name: s?.name ?? role, model: s?.model ?? 'standard', threads: threads.map((t) => t.id), done: turnTaken(session, role), ...extra });
   };
-  if (session.phase === 'evidence') {
+  if (session.phase === 'evidence' && isLab(session)) {
+    // The invention lab studies the thing itself: its anatomy (required: nothing can be invented for a thing nobody
+    // has looked at), the standard kit of its genre, what the people who use it say, and what has become possible.
+    const reused = new Set(session.reused ?? []);
+    const done = (role, kind = role) => (reused.has(kind) ? { done: true, reused: true } : {});
+    list.push({ role: 'anatomist', name: 'the anatomist', model: 'strongest', threads: [], done: turnTaken(session, 'anatomist'), ...done('anatomist', 'anatomy') });
+    list.push({ role: 'genre', name: 'the genre scout', model: 'strongest', threads: [], done: turnTaken(session, 'genre'), optional: true, ...done('genre') });
+    list.push({ role: 'voice', name: 'the voice scout', model: 'standard', threads: [], done: turnTaken(session, 'voice'), optional: true, ...done('voice') });
+    list.push({ role: 'tech', name: 'the tech scan', model: 'standard', threads: [], done: turnTaken(session, 'tech'), optional: true, ...done('tech') });
+  }
+  // At the study the person reads what the lab understood; what they correct, the anatomist revises.
+  if (session.phase === 'study' && session.study?.pending) list.push({ role: 'anatomist', name: 'the anatomist, to revise the anatomy', model: 'strongest', threads: [], done: false });
+  if (session.phase === 'evidence' && !isLab(session)) {
     // Groundwork an earlier session left fresh in the knowledge bank is taken in at the collection: its turn is done.
     const reused = new Set(session.reused ?? []);
     const done = (role) => (reused.has(role) ? { done: true, reused: true } : {});
@@ -228,7 +246,7 @@ export function turns(session, record, verdicts = null) {
     if (verdicts?.set?.notes.some((n) => n.asksRuling)) list.push({ ...list.pop(), done: true }, { role: 'judge', name: seat(session, 'judge')?.name ?? 'judge', model: seat(session, 'judge')?.model ?? 'standard', threads: [], done: Boolean(verdicts.set.changes) });
   }
   if (session.phase === 'examine') {
-    const roles = session.step === 'attack' ? (isLab(session) ? ['red-team', 'client'] : ['red-team', 'client', ...proposers(session).filter((r) => r !== 'client')]) : proposers(session);
+    const roles = session.step === 'attack' ? (isVenture(session) ? ['red-team', 'client'] : ['red-team', 'client', ...proposers(session).filter((r) => r !== 'client')]) : proposers(session);
     for (const role of roles) {
       const mine = threadsFor(session, record, role);
       if (mine.length) add(role, mine);
@@ -242,7 +260,7 @@ export function turns(session, record, verdicts = null) {
   return list.filter((t) => t.done || t.role === 'judge' || started(session, t.role) || room-- > 0);
 }
 
-const SPENDING = ['evidence', 'frame', 'propose', 'amplify', 'examine'];
+const SPENDING = ['evidence', 'study', 'frame', 'propose', 'amplify', 'examine'];
 export const debateSpent = (session) => SPENDING.includes(session.phase) && session.runs >= debateAllowance(session);
 // Whether a role's context for the current step was printed already, and so its run counted.
 const started = (session, role) => (session.log ?? []).some((l) => l.role === role && l.phase === session.phase && l.round === session.round && l.step === session.step);
@@ -260,12 +278,15 @@ function checkHypothesis(s, at, ctx, role) {
   for (const key of Object.keys(s.hypothesis)) if (!HYPOTHESIS_PARTS.includes(key)) errors.push(`${at}.hypothesis: unknown property "${key}"`);
   errors.push(...testErrors(s.test, `${at}.test`));
   if (!['small', 'medium', 'large'].includes(s.effort)) errors.push(`${at}.effort: small, medium or large`);
-  if (!SCALES.includes(s.scale)) errors.push(`${at}.scale: ${SCALE_TEXT}`);
-  errors.push(...whereErrors(s.where, `${at}.where`, { required: !isLab(session) && WHERE_SCALES.includes(s.scale) }));
+  if (!isLab(session) && !SCALES.includes(s.scale)) errors.push(`${at}.scale: ${SCALE_TEXT}`);
+  errors.push(...whereErrors(s.where, `${at}.where`, { required: !isFramed(session) && WHERE_SCALES.includes(s.scale) }));
   errors.push(...priorArtErrors(s.priorArt, `${at}.priorArt`, new Set(ctx.evidence.entries.map((e) => e.id))));
   if (isLab(session)) {
+    errors.push(...inventionErrors(s, at, { session, frame: loadFrame(ctx.dir), anatomy: loadAnatomy(ctx.dir), pass: passOf(session), role }));
+    if (s.uncovered !== undefined) errors.push(`${at}.uncovered: an invention says where it comes from with "answers" or "provocation"`);
+  } else if (isVenture(session)) {
     errors.push(...betErrors(s, at, { session, frame: loadFrame(ctx.dir), pass: passOf(session), role }));
-    if (s.uncovered !== undefined) errors.push(`${at}.uncovered: a bet of the lab says where it comes from with "answers" or "provocation"`);
+    if (s.uncovered !== undefined) errors.push(`${at}.uncovered: a bet of the venture board says where it comes from with "answers" or "provocation"`);
   } else if (passOf(session) === 2) {
     if (SCALES.includes(s.scale) && !SECOND_SCALES.includes(s.scale)) errors.push(`${at}.scale: in the second pass an idea is new or a direction: something the business does not do yet, or a remake of what it has`);
     const uncovered = one(s.uncovered);
@@ -300,11 +321,16 @@ function checkAttackStep(s, at, ctx, role) {
     return errors;
   }
   // attack
-  if (!Object.hasOwn(ATTACK_KINDS, s.kind)) errors.push(`${at}.kind: one of ${Object.keys(ATTACK_KINDS).join(', ')}`);
-  if (isLab(session) && role === 'red-team') {
+  if (!Object.hasOwn(attackKinds(session), s.kind)) errors.push(`${at}.kind: one of ${Object.keys(attackKinds(session)).join(', ')}`);
+  // In the lab an attack may name the assumption it is on; it need not.
+  if (isLab(session) && s.assumption !== undefined) {
+    const h = record.statements.find((x) => x.thread === s.thread && x.type === 'hypothesis');
+    if (!Number.isInteger(s.assumption) || s.assumption < 0 || s.assumption >= (h?.assumptions?.length ?? 0)) errors.push(`${at}.assumption: the position (from 0) of the assumption this attack is on; leave it out when the attack is on the invention as a whole`);
+  }
+  if (isVenture(session) && role === 'red-team') {
     const h = record.statements.find((x) => x.thread === s.thread && x.type === 'hypothesis');
     const count = h?.assumptions?.length ?? 0;
-    if (!Number.isInteger(s.assumption) || s.assumption < 0 || s.assumption >= count) errors.push(`${at}.assumption: the position (from 0) of the assumption this attack is on; ${t.id} rests on ${count}. In the lab an attack is on what a bet assumes, never on the bet as a whole`);
+    if (!Number.isInteger(s.assumption) || s.assumption < 0 || s.assumption >= count) errors.push(`${at}.assumption: the position (from 0) of the assumption this attack is on; ${t.id} rests on ${count}. In the venture board an attack is on what a bet assumes, never on the bet as a whole`);
   }
   if (role === 'red-team' && session.round === 1 && !ctx.pending.some((x) => x.type === 'steelman' && x.thread === s.thread)
     && !inThread(record, s.thread).some((x) => x.type === 'steelman' && x.by === 'red-team')) {
@@ -418,11 +444,11 @@ export function say(ctx, role, statements, { now = () => new Date().toISOString(
     const have = record.threads.filter((t) => t.by === role && (t.pass ?? 1) === 1).length;
     if (have + pending.length > MAX_PER_ROLE) errors.push(`At most ${MAX_PER_ROLE} hypotheses per role: you have ${have} and sent ${pending.length} more. Keep the strongest.`);
     const scales = [...record.statements.filter((x) => x.type === 'hypothesis' && x.by === role).map((x) => x.scale), ...pending.map((x) => x.scale)];
-    if (pending.length && !isLab(session) && !scales.includes('new')) errors.push('At least one of your hypotheses is new: something the business does not do or have at all (a product, a tool, a channel, a partnership, an audience; see "Range" in your instructions), with a first step cheap enough to test. Replace your weakest idea with one, or send it with the others.');
+    if (pending.length && !isFramed(session) && !scales.includes('new')) errors.push('At least one of your hypotheses is new: something the business does not do or have at all (a product, a tool, a channel, a partnership, an audience; see "Range" in your instructions), with a first step cheap enough to test. Replace your weakest idea with one, or send it with the others.');
   }
   if (session.phase === 'propose' && passOf(session) === 2) {
     const have = record.threads.filter((t) => t.by === role && t.pass === 2).length;
-    if (have + pending.length < SECOND_MIN && !repeated) errors.push(isLab(session) ? `The second pass asks for at least ${SECOND_MIN} bet harvested from a provocation: see "The second pass" in your instructions.` : `The second pass asks for at least ${SECOND_MIN} idea on ground none of the ideas on the table covers. Look where nobody looked: see "The second pass" in your instructions.`);
+    if (have + pending.length < SECOND_MIN && !repeated) errors.push(isFramed(session) ? `The second pass asks for at least ${SECOND_MIN} ${isLab(session) ? 'invention' : 'bet'} harvested from a provocation: see "The second pass" in your instructions.` : `The second pass asks for at least ${SECOND_MIN} idea on ground none of the ideas on the table covers. Look where nobody looked: see "The second pass" in your instructions.`);
     if (have + pending.length > SECOND_MAX) errors.push(`At most ${SECOND_MAX} ideas in the second pass: you have ${have} and sent ${pending.length} more. Keep the furthest from what is on the table.`);
   }
   if (errors.length) return { errors, warnings };
@@ -451,8 +477,8 @@ export function say(ctx, role, statements, { now = () => new Date().toISOString(
         test: Object.fromEntries(Object.entries(s.test).map(([k, v]) => [k, one(v)])), effort: s.effort, scale: s.scale,
         ...(s.where?.length ? { where: cleanWhere(s.where) } : {}),
         priorArt: cleanPriorArt(s.priorArt),
-        ...(isLab(session) ? cleanBet(s) : {}),
-        ...(pass === 2 && !isLab(session) ? { pass, uncovered: one(s.uncovered) } : pass === 2 ? { pass } : {}),
+        ...(isLab(session) ? cleanInvention(s) : isVenture(session) ? cleanBet(s) : {}),
+        ...(pass === 2 && !isFramed(session) ? { pass, uncovered: one(s.uncovered) } : pass === 2 ? { pass } : {}),
         ...(s.returns ? { returns: s.returns, whatChanged: one(s.whatChanged) } : {}),
       });
       added.push({ n, thread: id, type: s.type });
@@ -540,7 +566,7 @@ export function saveDocket(ctx, docket, { ideas, date } = {}) {
     if (a?.returns !== undefined && !/^I\d{1,4}$/.test(a.returns)) errors.push(`$.admitted[${i}].returns: a ledger id such as I7`);
     if (a?.adopt !== undefined) {
       const amp = record.statements.find((s) => s.n === a.adopt);
-      if (!isLab(session)) errors.push(`$.admitted[${i}].adopt: only the invention lab adopts an amplified form`);
+      if (!isFramed(session)) errors.push(`$.admitted[${i}].adopt: only the venture board and the invention lab adopt an amplified form`);
       else if (!amp || amp.type !== 'amplify' || amp.thread !== a.thread) errors.push(`$.admitted[${i}].adopt: ${a.adopt} is not an amplification of ${a.thread}`);
     }
     if (!NOVELTY.includes(a?.novelty)) errors.push(`$.admitted[${i}].novelty: "fresh" when the idea could only come from looking at this project and its market, "familiar" when any adviser would give it to any firm of this kind`);
@@ -561,14 +587,14 @@ export function saveDocket(ctx, docket, { ideas, date } = {}) {
     return {
       title: h.title, goal: session.goal, proposedBy: h.by, effort: h.effort, ...(h.scale ? { scale: h.scale } : {}),
       hypothesis: a.adopt ? { ...h.hypothesis, ...record.statements.find((s) => s.n === a.adopt).bigger } : h.hypothesis,
-      ...(isLab(session) ? { origin: 'lab' } : {}),
+      ...(isFramed(session) ? { origin: kindOf(session) } : {}),
       novelty: a.novelty, ...(h.where?.length ? { where: h.where } : {}),
       ...(h.priorArt ? { priorArt: { exists: h.priorArt.exists, searched: h.priorArt.searched, ...(h.priorArt.who ? { who: h.priorArt.who } : {}), ...(h.priorArt.difference ? { difference: h.priorArt.difference } : {}) } } : {}),
       test: { what: h.test.what, metric: h.test.metric, threshold: h.test.threshold, checkAfter: h.test.checkAfter, ...(h.test.baseline ? { baseline: h.test.baseline } : {}) },
       ...(returns ? { returns, ...(whatChanged ? { whatChanged } : {}) } : {}),
     };
   });
-  const ledger = applyIdeas(ideas, { ideas: entries }, { by: isLab(session) ? 'lab' : 'council', session: session.id, date });
+  const ledger = applyIdeas(ideas, { ideas: entries }, { by: kindOf(session), session: session.id, date });
   if (ledger.errors.length) return { errors: ledger.errors.map((e) => e.replace(/^\$\.ideas\[(\d+)\]/, (_, n) => `$.admitted[${n}] (${admitted[n].thread})`)) };
 
   admitted.forEach((a, i) => {
@@ -621,8 +647,17 @@ export function advance(ctx, { force = false, ideas = [], date } = {}) {
     case 'open': go('evidence'); break;
     case 'evidence':
       if (!evidence.collectedAt) errors = ['The evidence has not been collected: run "evidence --collect" first.'];
-      else if (isLab(session)) go('frame', 0, 'frame');
+      else if (isLab(session)) {
+        errors = hold();
+        // Nothing is invented for a thing nobody has studied: the anatomy cannot be skipped, not even with --force.
+        if (!errors.length && !session.study?.anatomy) errors = ['The anatomy has not been saved: start the anatomist. The lab invents for the thing it studied, so this turn cannot be skipped.'];
+        if (!errors.length) go('study', 0, 'show');
+      } else if (isVenture(session)) go('frame', 0, 'frame');
       else go('track-record');
+      break;
+    case 'study':
+      errors = hold();
+      if (!errors.length) go('frame', 0, 'frame');
       break;
     case 'track-record': go('propose', 0, 'first'); break;
     case 'frame': {
@@ -650,8 +685,8 @@ export function advance(ctx, { force = false, ideas = [], date } = {}) {
       if (errors.length) break;
       // The second pass needs runs of its own; with the debate's runs spent it is skipped, not cut short.
       if (passOf(session) === 1 && !debateSpent(session)) go('propose', 0, 'second');
-      else if (isLab(session) && !debateSpent(session)) {
-        // In the lab every bet is built on by another seat before the judge sees it.
+      else if (isFramed(session) && !debateSpent(session)) {
+        // In the venture board and the lab every idea is built on by another seat before the judge sees it.
         go('amplify');
         session.assignments = assignAmplifiers(session, record);
       } else go('docket');
@@ -690,7 +725,7 @@ export function advance(ctx, { force = false, ideas = [], date } = {}) {
         const question = asked(t);
         if (question && !said(t, ['attack'])) shut(t, 'a question nobody present can answer', { question: question.n });
       }
-      if (session.round >= maxRounds(session)) for (const t of openThreads(record)) shut(t, isLab(session) ? 'the last round is over' : 'the third round is over');
+      if (session.round >= maxRounds(session)) for (const t of openThreads(record)) shut(t, isVenture(session) ? 'the last round is over' : 'the third round is over');
       if (session.closing || !openThreads(record).length) toVerdict();
       else go('examine', session.round + 1, 'attack');
       break;
@@ -699,7 +734,7 @@ export function advance(ctx, { force = false, ideas = [], date } = {}) {
       const admitted = record.threads.filter((t) => t.status === 'admitted');
       if (verdicts.rulings.length !== admitted.length) { errors = ['The judge has not ruled on every admitted idea yet.']; break; }
       // One survivor, or none, is not a set.
-      if (survivors(verdicts).length >= 2 && !isLab(session)) go('set');
+      if (survivors(verdicts).length >= 2 && !isVenture(session)) go('set');
       else errors = settle();
       break;
     }
@@ -735,11 +770,15 @@ export function nextStep(session, record, evidence, verdicts = null) {
       return all.length ? `The evidence is collected.${from} Start ${all.join(', ')}, at once; then run "next".` : `The evidence is collected.${from} Nothing more to look up: run "next".`;
     }
     case 'track-record': return 'Check the ideas whose test date has passed, then run "next".';
+    case 'study': {
+      if (session.study?.pending) return 'The person corrected the anatomy: start the anatomist, to revise it. Then run "next".';
+      return 'Show the person what the lab understood ("study --show") and ask what is wrong or missing. Save each correction with "study --correct"; with none, run "next".';
+    }
     case 'propose': {
       const pass = passOf(session) === 2 ? 'second pass' : 'first pass';
       if (debateSpent(session)) return `The debate has used its agent runs, so no more proposers are started. ${waiting.length ? `Wait for ${names}, already started, then run "next"` : 'Run "next"'} with what was proposed.`;
       if (waiting.length) return `Proposals, ${pass}: start the proposers, all at once: ${names}.`;
-      if (isLab(session)) return passOf(session) === 1 ? 'Everyone has proposed. Run "next" for the second pass, where each seat harvests the provocations.' : 'Both passes are done. Run "next": every bet is given to another seat to build on.';
+      if (isFramed(session)) return passOf(session) === 1 ? 'Everyone has proposed. Run "next" for the second pass, where each seat harvests the provocations.' : `Both passes are done. Run "next": every ${isLab(session) ? 'invention' : 'bet'} is given to another seat to build on.`;
       return passOf(session) === 1 ? 'Everyone has proposed. Run "next" for the second pass, where each proposer sees the themes on the table and looks elsewhere.' : 'Both passes are done. Run "next" for the docket.';
     }
     case 'frame': {
@@ -747,7 +786,7 @@ export function nextStep(session, record, evidence, verdicts = null) {
       if (session.step === 'frame') return waiting.length ? 'Start the framer.' : 'The frame is saved. Run "next": the provocateur writes the provocations.';
       return waiting.length ? 'Start the provocateur.' : 'The frame and the provocations are saved. Show the person the framings ("frame --show") and ask which matter; save their pick with "frame --pick H1,C2", or go on without one. Then run "next".';
     }
-    case 'amplify': return names ? `Every bet goes to another seat to make it bigger: start, all at once: ${names}.` : 'Every bet has been built on. Run "next" for the docket.';
+    case 'amplify': return names ? `Every ${isLab(session) ? 'invention' : 'bet'} goes to another seat to make it bigger: start, all at once: ${names}.` : `Every ${isLab(session) ? 'invention' : 'bet'} has been built on. Run "next" for the docket.`;
     case 'docket': return record.docket ? 'The docket is saved. Run "next" to open the examination.' : 'Start the judge for the docket.';
     case 'examine': {
       if (debateSpent(session)) return `The debate has used its agent runs, so nobody more is started in it: a refusal for the budget is final and is not retried. ${waiting.length ? `Wait for ${names}, already started, then run "next"` : 'Run "next"'}: the judge rules on what is there.`;

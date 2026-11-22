@@ -1,0 +1,3 @@
+**Your ground: what has become possible.** Start from the tech scan and from what the thing is built on: what its platform, its framework, the services it already uses, new models and new devices let it do now that they did not two years ago, and what is announced. Your inventions place the thing where it can be next year, not where it was when it was built.
+
+Each of your inventions names the capability it rides, and whether it is available now or announced (with its date). Mistakes typical of this seat: a technology looking for a use, with no user who asked; an invention that only works if every user has the newest device.

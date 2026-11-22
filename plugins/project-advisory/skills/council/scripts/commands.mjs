@@ -4,7 +4,7 @@ import { parseLooseJson } from './lib/io.mjs';
 import { loadFacts, saveFacts, putFact } from './lib/bank.mjs';
 import { loadIdeas, saveIdeas, applyIdeas, ideasPath, trackRecord, setAside } from './lib/ideas.mjs';
 import { digest as bankDigest } from './lib/digest.mjs';
-import { createSession, resolveSession, loadSession, saveSession, budgetOf, budgetWarning, spendRun, recast, takeTurn, DEFAULT_GOAL } from './lib/session.mjs';
+import { createSession, resolveSession, loadSession, saveSession, budgetOf, budgetWarning, spendRun, recast, takeTurn, DEFAULT_GOAL, isLab, isFramed } from './lib/session.mjs';
 import { buildContext, taskLine } from './lib/context.mjs';
 import { dueForCheck } from './lib/ideas.mjs';
 import { docTurns, docNextStep, advanceDocs, renderDocs, saveDocument, closeSession, takePictures } from './lib/flow.mjs';
@@ -12,7 +12,11 @@ import { brandOf } from './lib/documents.mjs';
 import { loadEvidence, saveEvidence, collectEvidence, addEvidence, evidencePath } from './lib/evidence.mjs';
 import { loadRecord, saveRecord, say as saySaved, saveDocket, advance, turns, nextStep, openThreads } from './lib/record.mjs';
 import { findBrowser, screenshot, VIEWS, lookSlug } from './lib/browser.mjs';
-import { saveFrame, loadFrame, validateFrame, cleanFrame, validateProvocations, cleanProvocations, pickErrors } from './lib/lab.mjs';
+import { saveFrame, loadFrame, validateFrame, cleanFrame, validateProvocations, cleanProvocations, pickErrors } from './lib/frame.mjs';
+import { KINDS, kindOf as kindOfSession, labelOf } from './lib/paths.mjs';
+import { migrateVenture } from './lib/migrate.mjs';
+import { detectObject, gitHead, OBJECT_KINDS, OBJECT_WORDS } from './lib/object.mjs';
+import { loadAnatomy, saveAnatomy, validateAnatomy, cleanAnatomy, anatomyView, loadGenre, saveGenre, validateGenre, cleanGenre } from './lib/anatomy.mjs';
 import { saveGroundwork, parseRefresh, cachedLook, cacheLook, loadGroundwork } from './lib/groundwork.mjs';
 import { validatePrimer, cleanPrimer } from './lib/primer.mjs';
 import { loadVerdicts, saveVerdicts, saveRulings, saveSetNotes, saveSetChanges, survivors, VERDICTS } from './lib/verdict.mjs';
@@ -20,8 +24,11 @@ import { loadVerdicts, saveVerdicts, saveRulings, saveSetNotes, saveSetChanges, 
 // The commands of the council skill. Each returns JSON (Markdown for `digest`); a refused save returns
 // { "ok": false, "errors": [...] }, which the caller fixes and sends again.
 
-const rootOf = (o) => path.resolve(o.root ?? process.cwd());
-const kindOf = (o) => { const k = o.kind ?? 'council'; if (!['council', 'lab'].includes(k)) throw new Error(`Unknown --kind "${k}": council or lab`); return k; };
+// The old invention lab's sessions are moved to the venture board the first time any command runs on the project.
+const rootOf = (o) => { const root = path.resolve(o.root ?? process.cwd()); if (fs.existsSync(root)) migrateVenture(root); return root; };
+const kindOf = (o) => { const k = o.kind ?? 'council'; if (!KINDS.includes(k)) throw new Error(`Unknown --kind "${k}": ${KINDS.join(', ')}`); return k; };
+const fail = (...errors) => ({ ok: false, errors, warnings: [] });
+const one = (s) => String(s ?? '').replace(/\s+/g, ' ').trim();
 
 function readStdin() {
   if (process.stdin.isTTY) throw new Error('This command reads JSON from standard input — pipe it in.');
@@ -49,11 +56,12 @@ function view({ root, dir, session, record, evidence, verdicts }) {
   const documents = ['write', 'review'].includes(session.phase);
   const list = documents ? docTurns({ dir, session, record, evidence, verdicts }, root) : turns(session, record, verdicts);
   // Two jobs are not seats at the table: choosing the cast for an unusual goal, and checking the tests that are due.
-  if (session.phase === 'open' && session.kind !== 'lab' && session.goal !== DEFAULT_GOAL && session.cast.some((s) => s.role === 'search')) list.push({ role: 'casting', name: 'casting', model: 'strongest', threads: [], done: false, optional: true });
+  if (session.phase === 'open' && !session.kind && session.goal !== DEFAULT_GOAL && session.cast.some((s) => s.role === 'search')) list.push({ role: 'casting', name: 'casting', model: 'strongest', threads: [], done: false, optional: true });
   const due = session.phase === 'track-record' ? dueForCheck(loadIdeas(root)).map((i) => i.id) : [];
   if (due.length) list.push({ role: 'track-record', name: 'track record', model: 'standard', threads: [], done: false, optional: true });
   return {
     session: session.id, dir, goal: session.goal, phase: session.phase, round: session.round || null, step: session.step,
+    ...(isLab(session) ? { object: session.object ?? null, ...(session.focus ? { focus: session.focus } : {}) } : {}),
     budget: budgetOf(session),
     evidence: { entries: evidence.entries.length, missing: evidence.missing, ...(evidence.reused?.length ? { reused: evidence.reused.map(({ kind, at, from }) => ({ kind, at, from })) } : {}) },
     threads: {
@@ -88,14 +96,21 @@ export function init(o) {
   if (!fs.existsSync(root) || !fs.statSync(root).isDirectory()) throw new Error(`Project folder not found: ${root}`);
   if (o.url) checkUrl(o.url);
   const kind = kindOf(o);
-  const { dir, session } = createSession(root, { goal: o.goal, url: o.url, data: o.data, budget: o.budget, kind });
+  // The lab works on a thing of a kind: the person may name it, otherwise it is guessed from the project and the
+  // anatomist confirms or corrects it.
+  if (o.object !== undefined && !OBJECT_KINDS.includes(o.object)) throw new Error(`Unknown --object "${o.object}". The kinds: ${OBJECT_KINDS.join(', ')}`);
+  if (kind !== 'lab' && (o.object !== undefined || o.focus !== undefined)) throw new Error('--object and --focus are for the invention lab');
+  const detected = kind === 'lab' ? detectObject(root, { url: o.url }) : null;
+  const object = detected ? (o.object ? { kind: o.object, from: 'person' } : { kind: detected.kind, from: 'detected', confidence: detected.confidence, signals: detected.signals }) : null;
+  const { dir, session } = createSession(root, { goal: o.goal, url: o.url, data: o.data, budget: o.budget, kind, object, focus: o.focus });
   // A goal the person gives is remembered: next week's session starts from it without being told again.
   if (session.goalSource === 'given') saveFacts(root, putFact(loadFacts(root), { key: `${kind}.goal`, value: session.goal, source: 'human', confidence: 'high', by: 'human' }).facts);
   const short = budgetWarning(session);
   // With nothing better, the documents would carry the folder's name as the business's.
   const brand = brandOf(root);
   const unnamed = brand.nameFrom === 'folder' ? `The documents would name the business "${brand.name}", after the project folder. Ask the person for the business's name and save it with "fact --key brand.name --value <name>".` : null;
-  const warnings = [short, unnamed].filter(Boolean);
+  const unsure = object?.from === 'detected' && object.confidence === 'low' ? `The lab guessed this project is ${OBJECT_WORDS[object.kind]} (${object.signals.at(-1)}), without much to go on. Ask the person what it is; to name it, set this session aside and run "init" again with --object (${OBJECT_KINDS.join(', ')}).` : null;
+  const warnings = [short, unnamed, unsure].filter(Boolean);
   return { ok: true, goalSource: session.goalSource, healthRun: session.run, url: session.url, data: session.data, business: { name: brand.name, from: brand.nameFrom }, ...(warnings.length ? { warnings } : {}), ...view({ root, dir, session, record: loadRecord(dir), evidence: loadEvidence(dir), verdicts: loadVerdicts(dir) }) };
 }
 
@@ -128,10 +143,18 @@ export function evidence(o, { stdin = readStdin } = {}) {
     // Statements cite evidence by id, so the collection never runs twice.
     if (have.collectedAt) return { ok: true, already: true, path: evidencePath(dir), entries: have.entries.length, missing: have.missing, reused: have.reused ?? [] };
     const refresh = parseRefresh(o.refresh);
-    const collected = collectEvidence(root, session, { refresh });
+    const collected = collectEvidence(root, session, { refresh, head: isLab(session) ? gitHead(root) : null });
     saveEvidence(dir, collected);
     // What was reused needs no turn; what is asked to be done again is done again, pictures of pages included.
     session.reused = collected.reused.map((r) => r.kind);
+    // A reused anatomy or genre is what this session studies from, as if its own turn had written it.
+    if (session.reused.includes('anatomy')) {
+      const record = loadGroundwork(root, 'anatomy');
+      saveAnatomy(dir, { ...record.anatomy, reusedFrom: record.at });
+      session.study = { anatomy: record.at, reused: true };
+      if (record.anatomy?.anatomy?.kind) session.object = { ...(session.object ?? {}), kind: record.anatomy.anatomy.kind, from: 'anatomist' };
+    }
+    if (session.reused.includes('genre')) saveGenre(dir, { genre: loadGroundwork(root, 'genre').genre, reusedFrom: loadGroundwork(root, 'genre').at });
     session.refresh = refresh;
     saveSession(dir, session);
     return { ok: true, path: evidencePath(dir), entries: collected.entries.length, dataFiles: collected.data.length, site: collected.site, missing: collected.missing, reused: collected.reused.map(({ kind, at, from, entries }) => ({ kind, at, from, entries })) };
@@ -143,7 +166,7 @@ export function evidence(o, { stdin = readStdin } = {}) {
   saveEvidence(dir, updated);
   // The competitor analyst's look around, and the horizon scan, are their turns in the evidence phase. What they found
   // is kept in the knowledge bank, so the next session soon after (of this skill or the invention lab) reuses it.
-  if (session.phase === 'evidence' && ['competitors', 'horizon'].includes(o.role)) {
+  if (session.phase === 'evidence' && ['competitors', 'horizon', 'voice', 'tech'].includes(o.role)) {
     takeTurn(session, o.role);
     saveSession(dir, session);
     saveGroundwork(root, o.role, { session, entries: updated.entries.filter((e) => e.by === o.role && !e.reusedFrom) });
@@ -156,11 +179,15 @@ export function evidence(o, { stdin = readStdin } = {}) {
 export function frame(o, { stdin = readStdin } = {}) {
   const ctx = sessionCtx(o);
   const { dir, session } = ctx;
-  if (session.kind !== 'lab') return { ok: false, errors: ['Only an invention lab session has a frame (run it as the lab).'], warnings: [] };
+  if (!isFramed(session)) return { ok: false, errors: ['Only a venture board or an invention lab session has a frame (run it as one of them).'], warnings: [] };
   const current = loadFrame(dir) ?? {};
   if (o.show) {
     if (!current.frame) return { ok: false, errors: ['The frame has not been written yet.'], warnings: [] };
-    return { ok: true, ideal: current.frame.ideal, questions: current.frame.questions, contradictions: current.frame.contradictions.map(({ id, want, butThen }) => ({ id, text: `${want}, but then ${butThen}` })), picked: current.picked ?? null, provocations: (current.provocations ?? []).length };
+    return {
+      ok: true, ideal: current.frame.ideal, questions: current.frame.questions, contradictions: current.frame.contradictions.map(({ id, want, butThen }) => ({ id, text: `${want}, but then ${butThen}` })),
+      ...(current.frame.morphology ? { morphology: current.frame.morphology.map((d) => `${d.name}: ${d.options.map((x, i) => (i === d.now ? `[${x}]` : x)).join(' / ')}`), evolution: current.frame.evolution } : {}),
+      picked: current.picked ?? null, provocations: (current.provocations ?? []).length,
+    };
   }
   if (o.pick !== undefined) {
     if (!['frame', 'propose'].includes(session.phase) || (session.phase === 'propose' && session.dealt)) return { ok: false, errors: ['The framings are picked before the proposing starts.'], warnings: [] };
@@ -174,9 +201,9 @@ export function frame(o, { stdin = readStdin } = {}) {
   const { data, error } = readJsonInput(stdin, 'the frame');
   if (error) return error;
   if (o.role === 'framer') {
-    const errors = validateFrame(data.frame);
+    const errors = validateFrame(data.frame, kindOfSession(session));
     if (errors.length) { refused(ctx, 'framer', 'frame', errors); return { ok: false, errors, warnings: [] }; }
-    saveFrame(dir, { ...current, frame: cleanFrame(data.frame), savedAt: new Date().toISOString() });
+    saveFrame(dir, { ...current, frame: cleanFrame(data.frame, kindOfSession(session)), savedAt: new Date().toISOString() });
     takeTurn(session, 'framer');
     saveSession(dir, session);
     return { ok: true, questions: data.frame.questions.length, contradictions: data.frame.contradictions.length };
@@ -191,6 +218,75 @@ export function frame(o, { stdin = readStdin } = {}) {
     return { ok: true, provocations: data.provocations.length };
   }
   throw new Error('Usage: frame --role framer | --role provocateur (JSON on standard input), --show, or --pick H1,C2');
+}
+
+// The invention lab's study of the thing it works on. The anatomist saves the anatomy (--role anatomist) and the genre
+// scout the standard kit of the genre (--role genre), each with the evidence it rests on; --show prints what the lab
+// understood, for the person; --correct saves what the person says is wrong or missing, which the anatomist then
+// revises, twice at most.
+export function study(o, { stdin = readStdin } = {}) {
+  const ctx = sessionCtx(o);
+  const { root, dir, session } = ctx;
+  if (!isLab(session)) return fail('Only an invention lab session studies the thing it works on (run it as the lab).');
+  const current = loadAnatomy(dir);
+  if (o.show) {
+    if (!current?.anatomy) return fail('The anatomy has not been written yet: the anatomist writes it in the evidence phase.');
+    const genre = loadGenre(dir)?.genre;
+    return { ok: true, ...anatomyView(current), ...(genre ? { genre: { category: genre.category, standardKit: genre.kit.map((k) => k.text) } } : {}), ...(session.focus ? { focus: session.focus } : {}), note: 'Show the person this, as it is, and ask what is wrong or missing. Each correction goes to the anatomist, who revises the anatomy before anyone invents.' };
+  }
+  if (o.correct !== undefined) {
+    if (session.phase !== 'study') return fail(`Corrections are made at the study, after the anatomy is written and before the frame; the session is in the ${session.phase} phase`);
+    if (!current?.anatomy) return fail('The anatomy has not been written yet.');
+    const text = one(o.correct);
+    if (text.length < 5) return fail('--correct: what is wrong or missing, in the person\'s words');
+    if ((session.study?.revisions ?? 0) >= 2) return fail('The anatomy has been revised twice. Go on with "next"; what is still wrong, tell the members in the open questions of the session instead.');
+    saveAnatomy(dir, { ...current, corrections: [...(current.corrections ?? []), { text, at: new Date().toISOString() }] });
+    session.study = { ...(session.study ?? {}), pending: (session.study?.pending ?? 0) + 1 };
+    saveSession(dir, session);
+    return { ok: true, corrections: (current.corrections?.length ?? 0) + 1, next: 'Start the anatomist, to revise the anatomy, once the person has said everything.' };
+  }
+  const { data, error } = readJsonInput(stdin, `the ${o.role === 'genre' ? 'genre' : 'anatomy'}`);
+  if (error) return error;
+  const items = Array.isArray(data.evidence) ? data.evidence : null;
+  if (o.role === 'anatomist') {
+    const revising = session.phase === 'study' && session.study?.pending;
+    if (session.phase !== 'evidence' && !revising) return fail(`The anatomy is written in the evidence phase, and revised at the study when the person corrects it; the session is in the ${session.phase} phase`);
+    const errors = validateAnatomy(data.anatomy);
+    if (!items) errors.push('$.evidence: what the anatomy rests on, each { "grade": "observed", "source": "<a file in the project or a page address>", "text" }');
+    else if (!revising && items.length < 3) errors.push('$.evidence: at least three files or pages it rests on: an anatomy that rests on nothing is a guess');
+    if (errors.length) { refused(ctx, 'anatomist', 'study', errors); return fail(...errors); }
+    const { evidence: updated, errors: evErrors, warnings } = addEvidence(ctx.evidence, items, { by: 'anatomist', root, session });
+    if (evErrors.length) { refused(ctx, 'anatomist', 'study', evErrors); return { ok: false, errors: evErrors, warnings }; }
+    saveEvidence(dir, updated);
+    const anatomy = cleanAnatomy(data.anatomy);
+    const corrections = (current?.corrections ?? []).map((c) => (revising ? { ...c, applied: true } : c));
+    const saved = { anatomy, savedAt: new Date().toISOString(), ...(corrections.length ? { corrections } : {}), ...(revising ? { revisedAt: new Date().toISOString() } : {}) };
+    saveAnatomy(dir, saved);
+    const before = session.object?.kind;
+    session.object = { ...(session.object ?? {}), kind: anatomy.kind, from: session.object?.from === 'person' && before === anatomy.kind ? 'person' : 'anatomist' };
+    session.study = { ...(session.study ?? {}), anatomy: new Date().toISOString().slice(0, 10), ...(revising ? { pending: 0, revisions: (session.study?.revisions ?? 0) + 1 } : {}) };
+    takeTurn(session, 'anatomist');
+    saveSession(dir, session);
+    saveGroundwork(root, 'anatomy', { session, entries: updated.entries.filter((e) => e.by === 'anatomist' && !e.reusedFrom), anatomy: { anatomy, ...(corrections.length ? { corrections } : {}) }, head: gitHead(root) });
+    const changed = before && before !== anatomy.kind ? [`The anatomist says this is ${OBJECT_WORDS[anatomy.kind]}, not ${OBJECT_WORDS[before]} as ${session.object.from === 'person' ? 'the person said' : 'was guessed'}: tell the person at the study.`] : [];
+    return { ok: true, revised: Boolean(revising), kind: anatomy.kind, parts: anatomy.parts.length, warnings: [...warnings, ...changed] };
+  }
+  if (o.role === 'genre') {
+    if (session.phase !== 'evidence') return fail(`The genre is written in the evidence phase; the session is in the ${session.phase} phase`);
+    const errors = validateGenre(data.genre);
+    if (!items || items.length < 3) errors.push('$.evidence: at least three pages it rests on, each { "grade": "observed", "source": "https://…", "date", "text" }');
+    if (errors.length) { refused(ctx, 'genre', 'study', errors); return fail(...errors); }
+    const { evidence: updated, errors: evErrors, warnings } = addEvidence(ctx.evidence, items, { by: 'genre', root, session });
+    if (evErrors.length) { refused(ctx, 'genre', 'study', evErrors); return { ok: false, errors: evErrors, warnings }; }
+    saveEvidence(dir, updated);
+    const genre = cleanGenre(data.genre);
+    saveGenre(dir, { genre, savedAt: new Date().toISOString() });
+    takeTurn(session, 'genre');
+    saveSession(dir, session);
+    saveGroundwork(root, 'genre', { session, entries: updated.entries.filter((e) => e.by === 'genre' && !e.reusedFrom), genre });
+    return { ok: true, kit: genre.kit.length, frontier: genre.frontier.length, warnings };
+  }
+  throw new Error('Usage: study --role anatomist | --role genre (JSON on standard input), --show, or --correct "<what the person said>"');
 }
 
 // The domain primer: how the trade works, with the sources it rests on. Saved in the knowledge bank, and its sources
@@ -405,4 +501,4 @@ export function digest(o) {
   return bankDigest(rootOf(o));
 }
 
-export const COMMANDS = { init, status, next, cast, evidence, primer, frame, context, say, look, verdict, save, shots, render, close, ideas, fact, digest };
+export const COMMANDS = { init, status, next, cast, evidence, primer, study, frame, context, say, look, verdict, save, shots, render, close, ideas, fact, digest };
