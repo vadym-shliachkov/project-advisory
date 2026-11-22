@@ -187,8 +187,11 @@ table.seats td:last-child { width: 30mm; white-space: nowrap; color: var(--muted
 .lede { font-size: 11pt; line-height: 1.55; color: var(--ink); max-width: var(--prose); margin: 0 0 var(--sp-3); break-before: avoid; break-inside: avoid; }
 .smaller { font-size: var(--t-sm); color: var(--muted); margin: 0 0 var(--sp-3); max-width: var(--prose); }
 /* The decision box: what the owner needs to know to say yes or no, each line labelled in words. */
-.decide { margin: var(--sp-3) 0 var(--sp-5); padding: var(--sp-2) var(--sp-4); background: var(--accent-soft); border-left: 3pt solid var(--accent); border-radius: 0 var(--radius) var(--radius) 0; max-width: 170mm; break-inside: avoid; }
-.decide > div { display: grid; grid-template-columns: 30mm 1fr; column-gap: var(--sp-3); padding: var(--sp-2) 0; }
+/* The box may run over the page rather than jump whole to the next one and leave the title alone on a half-empty page:
+   its lines stay whole, each part of it keeps its padding, and the sentence above stays with its first line. */
+.decide { margin: var(--sp-3) 0 var(--sp-5); padding: var(--sp-2) var(--sp-4); background: var(--accent-soft); border-left: 3pt solid var(--accent); border-radius: 0 var(--radius) var(--radius) 0; max-width: 170mm; break-inside: auto; -webkit-box-decoration-break: clone; box-decoration-break: clone; }
+.lede { break-after: avoid; }
+.decide > div { display: grid; grid-template-columns: 30mm 1fr; column-gap: var(--sp-3); padding: var(--sp-2) 0; break-inside: avoid; }
 .decide > div + div { border-top: 1px solid color-mix(in srgb, var(--accent) 14%, #ffffff); }
 .decide dt { font-size: var(--t-sm); font-weight: 600; color: var(--ink); line-height: 1.45; }
 .decide dd { margin: 0; font-size: 10pt; line-height: 1.45; color: var(--ink); }
@@ -240,7 +243,7 @@ table.present td:last-child { color: var(--muted); font-size: var(--t-sm); }
 .chapter-head h3 { margin: 0 0 var(--sp-2); font-size: var(--t-xl); max-width: 160mm; }
 .chapter-by { margin: 0 0 var(--sp-4); font-size: var(--t-sm); color: var(--muted); }
 .chapter-by .stamp { margin-left: var(--sp-2); }
-.pull { margin: 0 0 var(--sp-5); padding: var(--sp-1) 0 var(--sp-1) var(--sp-4); border-left: 3pt solid var(--accent); font-family: var(--serif); font-style: italic; font-size: var(--t-md); line-height: 1.45; color: var(--ink); max-width: var(--prose); break-inside: avoid; break-after: avoid; }
+.pull { margin: 0 0 var(--sp-5); padding: var(--sp-1) 0 var(--sp-1) var(--sp-4); border-left: 3pt solid var(--accent); font-family: var(--serif); font-style: italic; font-size: var(--t-md); line-height: 1.45; color: var(--ink); max-width: var(--prose); break-inside: avoid; }
 /* A speech may run over the page, so that pages fill; it never leaves fewer than three lines on either side, and the
    speaker's name and the evidence line stay with the words. */
 .speech { margin: 0 0 var(--sp-4); max-width: var(--prose); }
@@ -323,13 +326,17 @@ body.decision-brief { page: brief; }
 .decision-brief .band { padding: 8mm 10mm 7mm; border-radius: var(--radius); }
 .decision-brief .glance { padding: var(--sp-5) 0 0; }
 /* The plan may run on to the next page rather than leave the first one half empty. */
-.decision-brief .start { break-inside: auto; }
+.decision-brief .start { break-inside: auto; -webkit-box-decoration-break: clone; box-decoration-break: clone; }
 .decision-brief .start li { break-inside: avoid; }
 /* A heading and its lead stay with the first idea under them. */
 .b-part > .lead { break-after: avoid; break-inside: avoid; }
 .b-part { margin-top: var(--sp-6); }
 .b-part > h2 { font-size: var(--t-xl); }
-.b-idea { margin: 0 0 var(--sp-4); padding-top: var(--sp-3); border-top: 1px solid var(--line); max-width: 178mm; break-inside: avoid; }
+/* An idea with a long box may run over the page, or one idea would fill each page and leave half of it empty; its
+   title, tags and sentence stay together with the first line of its box. A short idea (killed, open) stays whole. */
+.b-idea { margin: 0 0 var(--sp-4); padding-top: var(--sp-3); border-top: 1px solid var(--line); max-width: 178mm; break-inside: auto; }
+.b-idea.b-other { break-inside: avoid; }
+.b-idea .tags, .b-lede { break-inside: avoid; break-after: avoid; }
 .b-head { display: flex; gap: var(--sp-3); align-items: baseline; margin: 0 0 var(--sp-1); font-size: var(--t-md); line-height: 1.3; color: var(--ink); break-after: avoid; }
 .b-head .stamp { margin-left: var(--sp-2); vertical-align: 1pt; }
 .b-no { font-family: var(--serif); font-weight: 600; color: var(--accent); min-width: 7mm; }
@@ -374,3 +381,9 @@ table.morphology td:first-child { width: 32%; }
 .inventions-doc section > .lead { break-after: avoid; break-inside: avoid; }
 .inventions-doc .method > .meta:last-child { break-before: avoid; }
 .inventions-doc table.key { break-inside: avoid; }
+/* In the bets and the inventions every field may run over the page, so a long one does not leave the page before it
+   half empty; its label stays with its first lines, and an attack stays with its answer. */
+.bets-doc .field, .inventions-doc .field { break-inside: auto; }
+.bets-doc .field p, .inventions-doc .field p { orphans: 3; widows: 3; }
+dl.survived dt { break-after: avoid; }
+dl.survived dd { break-inside: avoid; }
