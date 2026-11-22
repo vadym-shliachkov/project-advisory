@@ -10,7 +10,7 @@ A Claude Code and Codex plugin with five skills for a web project, all under one
 | `/project-advisory:venture` | Venture board, monthly or quarterly, that looks for what the business could start, sell, build or become. |
 | `/project-advisory:lab` | Invention lab that studies the site, app or tool itself and invents new things it could do, that nothing of its kind has. |
 
-No skill ever submits a form or contacts a real company or person.
+No skill ever submits a form or contacts a real company or person. Every agent is told so, and on Claude Code a hook enforces it (see [No-contact guard](#no-contact-guard)).
 
 ## project-health
 
@@ -157,6 +157,23 @@ It starts by understanding the thing. An anatomist reads the project's files and
 A framer then sets the problem with TRIZ and design thinking (the ideal result, the thing's contradictions, a morphological box, its line of evolution, "how might we" questions), and a provocateur writes absurd statements. Inventive seats (the user's voice, contradictions, parts and materials, far fields, what has become possible) invent from cards dealt to them; every invention says how a person would live it, names the parts of the thing it grows from, and says what was found when it was looked for elsewhere. Another seat makes every invention bigger, the judge turns away what things of its kind already have, and an examiner and the other seats attack each one over up to three rounds (does it exist already, can the thing do it, would its users want it) while its proposer defends, narrows or concedes. A judge who took no part rules on what survived, how new it is (new to the world, or new to things of its kind) and how feasible.
 
 Each session ends with a decision brief, the inventions (each with a sketch of what it could look like, how a person would live it, why it is new, what it grows from, the smallest prototype and what it survived), the discussion (the debate as the minutes of a society of inventors) and the session's pages. Its research is kept in the knowledge bank: the anatomy is reused while the project's code has not changed.
+
+## No-contact guard
+
+The plugin ships a `PreToolUse` hook (`hooks/hooks.json`, `hooks/no-contact.mjs`) that refuses a tool call which would submit a form, send a message, a post, an issue or a push, or otherwise send data to a site:
+
+- `curl`, `wget` and `Invoke-WebRequest` with a body or a method that sends data, mail commands, raw connections, `git push`, `gh` commands that create or comment, mail and chat links, and code run inline (`node -e`, `python -`, `bash -c`, `powershell -Command`) that posts, sends mail or drives a browser to click and type;
+- MCP tools whose name does not say they read (browser clicks, typing, form filling, script evaluation, sending messages, creating anything), and page addresses that carry form fields or an email address.
+
+Reading is never refused: opening and fetching pages, searching, pictures of pages, reading files, read-only `git` and `gh`, and the plugin's own scripts, whatever their input quotes.
+
+It applies always inside the plugin's own subagents (`member`, `area-analyst`, `writer`, which have no browser tools at all), and in the main session while a skill runs: every command of the skills' scripts arms it for two hours, and closing a council, venture or lab session lifts it. It is armed for the user, so every Claude Code window is guarded meanwhile. To lift it at once, run in your own terminal:
+
+```bash
+node "<plugin folder>/hooks/guard.mjs" off      # or: status
+```
+
+The hook refuses that command, and any change to the marker, from an agent. It is a guard, not a sandbox: it reads each command as a shell would, but a program written to a file and run later is not read. For a hard boundary, also turn on Claude Code's sandbox with a network allowlist. Codex does not run the hook; there, the rule rests on the agents' instructions and Codex's own sandbox.
 
 ## Development
 

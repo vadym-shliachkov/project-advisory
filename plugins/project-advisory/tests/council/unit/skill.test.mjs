@@ -40,7 +40,9 @@ test('the plugin stands alone: nothing is imported from another plugin', () => {
   walk(path.join(SKILL_DIR, 'scripts'));
   for (const file of files.filter((f) => f.endsWith('.mjs'))) {
     const imports = [...fs.readFileSync(file, 'utf8').matchAll(/from '([^']+)'|import\('([^']+)'\)/g)].map((m) => m[1] ?? m[2]);
-    for (const spec of imports) assert.ok(spec.startsWith('node:') || spec.startsWith('./'), `${path.basename(file)} imports ${spec}`);
+    // The one exception is the plugin's no-contact guard, imported where its absence is caught: the skill still runs
+    // when it is copied without the plugin's hooks folder.
+    for (const spec of imports) assert.ok(spec.startsWith('node:') || spec.startsWith('./') || (spec === '../../../hooks/guard.mjs' && path.basename(file) === 'council.mjs'), `${path.basename(file)} imports ${spec}`);
   }
 });
 

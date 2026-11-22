@@ -49,7 +49,11 @@ if (!fn) {
 
 try {
   const { values } = parseArgs({ args: rest, options: OPTIONS, allowPositionals: false, strict: true });
+  // The no-contact guard (hooks/ at the plugin's root): armed while a session runs, lifted when it is closed.
+  const guard = await import('../../../hooks/guard.mjs').catch(() => null);
+  guard?.arm({ root: values.root ?? process.cwd(), skill: values.kind ?? process.env.COUNCIL_KIND ?? 'council' });
   const result = await fn(values);
+  if (command === 'close' && result?.ok !== false) guard?.disarm({ root: values.root ?? process.cwd() });
   if (typeof result === 'string') process.stdout.write(result.endsWith('\n') ? result : `${result}\n`);
   else process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
   if (result && typeof result === 'object' && result.ok === false) process.exitCode = 1;

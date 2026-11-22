@@ -37,6 +37,9 @@ if (!fn) {
 
 try {
   const { values } = parseArgs({ args: rest, options: OPTIONS, allowPositionals: false, strict: true });
+  // The no-contact guard (hooks/ at the plugin's root): armed while a health check or a roadmap is worked on.
+  const guard = await import('../../../hooks/guard.mjs').catch(() => null);
+  guard?.arm({ root: values.root ?? process.cwd(), skill: 'project-health' });
   const result = await fn(values);
   if (typeof result === 'string') process.stdout.write(result.endsWith('\n') ? result : `${result}\n`);
   else process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
