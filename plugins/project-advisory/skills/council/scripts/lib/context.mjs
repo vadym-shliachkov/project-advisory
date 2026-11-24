@@ -1,17 +1,18 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { writeJson } from './io.mjs';
-import { SKILL_DIR, scriptOf, skillDirOf, kindOf } from './paths.mjs';
+import { SKILL_DIR, scriptOf, kindOf, promptDirs } from './paths.mjs';
 import { today } from './bank.mjs';
 import { digest, recordLine } from './digest.mjs';
 import { loadIdeas, dueForCheck, trackRecord, ideasPath } from './ideas.mjs';
-import { seat, proposers, isLab, isFramed } from './session.mjs';
+import { seat, proposers, isLab, isStudio, isFramed } from './session.mjs';
 import { evidencePath } from './evidence.mjs';
 import { loadGroundwork } from './groundwork.mjs';
 import { loadFrame, dealtTo, adopted } from './frame.mjs';
-import { anatomyPath, genrePath, loadAnatomy } from './anatomy.mjs';
+import { anatomyPath, genrePath, loadAnatomy, loadGenre } from './anatomy.mjs';
+import { currentsPath, slopPath, loadCurrents, loadSlop, designersField } from './field.mjs';
 import { OBJECT_WORDS } from './object.mjs';
-import { attackKinds } from './record.mjs';
+import { attackKinds, unitOf } from './record.mjs';
 import { inThread, threadsFor, passOf } from './record.mjs';
 import { strengthAllowed, survivors } from './verdict.mjs';
 import { docTurn, DOC_STAFF } from './flow.mjs';
@@ -21,13 +22,30 @@ import { docTurn, DOC_STAFF } from './flow.mjs';
 
 // A session of the venture board or the lab reads its own skill's prompt when it has one, and the council's otherwise
 // (the rules of evidence, the reply, the reviews of the minutes and the layout review are the same).
-const agentsDir = (session, rel) => { const own = path.join(skillDirOf(kindOf(session)), 'agents'); return fs.existsSync(path.join(own, rel)) ? own : path.join(SKILL_DIR, 'agents'); };
+// The studio, which runs the lab's kind of session, reads the lab's prompt before the council's when it has none.
+const agentsDir = (session, rel) => promptDirs(kindOf(session)).find((d) => fs.existsSync(path.join(d, rel))) ?? path.join(SKILL_DIR, 'agents');
 const read = (rel, session = null) => fs.readFileSync(path.join(agentsDir(session, rel), rel), 'utf8').trim();
 const exists = (rel, session = null) => fs.existsSync(path.join(agentsDir(session, rel), rel));
 const one = (s) => String(s ?? '').replace(/\s+/g, ' ').trim();
 
 // Roles that are not seats at the table: they do one job for the session and say nothing in the debate.
-export const STAFF = ['track-record', 'casting', 'horizon', 'primer', 'framer', 'anatomist', 'genre', 'voice', 'tech', ...DOC_STAFF];
+export const STAFF = ['track-record', 'casting', 'horizon', 'primer', 'framer', 'anatomist', 'genre', 'voice', 'tech', 'awards', 'slop', ...DOC_STAFF];
+
+// ---- The studio's firewall ----
+
+// A designer cannot copy what it was not shown. Until the docket, the seats of the design studio are handed the field
+// without its sites: the patterns of what wins awards, the slop list and the habits of the trade, and an evidence
+// file in which the entries of the scouts who looked at other sites carry no address. The examiner and the judge see
+// all of it: finding the nearest site that exists is their job.
+const WITHHELD_BY = ['awards', 'genre', 'slop'];
+export const behindFirewall = (session, role) => isStudio(session) && ['frame', 'propose', 'amplify'].includes(session.phase) && (role === 'framer' || proposers(session).includes(role));
+function designersEvidence(evidence) {
+  return {
+    note: 'The scouts who looked at other sites wrote what they saw; the addresses are withheld from the designers on purpose. Cite an entry by its id as usual.',
+    ...evidence,
+    entries: evidence.entries.map((e) => (WITHHELD_BY.includes(e.by) ? { ...e, source: null, withheld: true } : e)),
+  };
+}
 
 function saveLines(cmd, save, shape, okLine, badLine) {
   if (!save) return ['Reply with the JSON object only, as described above. Do not write any files.'];
@@ -151,7 +169,9 @@ function turnOf(ctx, role, root) {
         if (role === 'genre') return { prompts: ['genre.md'], digest: true, input: { name: 'genre', data: { object: detected, focus: session.focus ?? null } }, extra: [`- What the lab understood about the thing (the anatomy), when the anatomist has saved it: ${anatomyPath(ctx.dir)}`], cmd: cmd('study --role genre'), shape: '{ "genre": { "category": "…", "kit": ["…"], "frontier": [ { "what": "…", "who": "…", "source": "https://…" } ], "habits": ["…"] }, "evidence": [ { "grade": "observed", "source": "https://…", "date": "2026-10-02", "text": "…" } ] }', okLine: 'genre: ok, 22 in the kit', badLine: 'genre: invalid — <first error>' };
         if (role === 'voice') return { prompts: ['voice.md'], digest: true, input: { name: 'voice', data: { object: detected, focus: session.focus ?? null } }, cmd: cmd('evidence --role voice'), shape: '{ "evidence": [ { "grade": "observed", "source": "https://…", "date": "2026-10-02", "text": "…" } ] }', okLine: 'voice: ok, 12 things people said', badLine: 'voice: invalid — <first error>' };
         if (role === 'tech') return { prompts: ['tech.md'], digest: true, input: { name: 'tech', data: { object: detected, focus: session.focus ?? null } }, cmd: cmd('evidence --role tech'), shape: '{ "evidence": [ { "grade": "observed", "source": "https://…", "date": "2026-10-02", "text": "…" } ] }', okLine: 'tech: ok, 10 openings', badLine: 'tech: invalid — <first error>' };
-        not('in the lab\'s evidence phase the anatomist, the genre scout, the voice scout and the tech scan look around');
+        if (isStudio(session) && role === 'awards') return { prompts: ['awards.md'], digest: true, input: { name: 'awards', data: { object: detected, sector: loadGenre(ctx.dir)?.genre?.category ?? null } }, cmd: cmd('study --role awards'), shape: '{ "currents": { "sample": [ { "site": "https://…", "award": "…", "idea": "…", "motion": "…", "technology": ["…"], "signature": "…" } ], "patterns": [ { "what": "…", "kind": "motion", "share": "common" } ], "reading": "…" }, "evidence": [ { "grade": "observed", "source": "https://…", "date": "2026-10-02", "text": "…" } ] }', okLine: 'awards: ok, 14 sites, 18 patterns', badLine: 'awards: invalid — <first error>' };
+        if (isStudio(session) && role === 'slop') return { prompts: ['slop.md'], digest: true, input: { name: 'slop', data: { object: detected, sector: loadGenre(ctx.dir)?.genre?.category ?? null } }, cmd: cmd('study --role slop'), shape: '{ "slop": { "tells": [ { "what": "…", "where": "layout", "why": "…" } ], "reading": "…" }, "evidence": [ { "grade": "observed", "source": "https://…", "date": "2026-10-02", "text": "…" } ] }', okLine: 'slop: ok, 22 tells', badLine: 'slop: invalid — <first error>' };
+        not(isStudio(session) ? 'in the studio\'s evidence phase the anatomist, the sector scout, the awards scout, the slop scout, the voice scout and the craft scan look around' : 'in the lab\'s evidence phase the anatomist, the genre scout, the voice scout and the tech scan look around');
       }
       if (role === 'primer') {
         // A primer written before is refreshed, not written again: what still holds stays, and what changed is said.
@@ -173,7 +193,7 @@ function turnOf(ctx, role, root) {
     }
     case 'amplify': {
       if (!mine.length) not(`${role} has nothing to build on`);
-      const word = isLab(session) ? 'inventions' : 'bets';
+      const word = `${unitOf(session)}s`;
       return { prompts: ['_contract.md', 'amplifier.md'], sheet: role !== 'client', input: { name: `amplify-${role}`, data: { [word]: mine.map((t) => ideaView(ctx, t)) } }, cmd: cmd(`say --role ${role}`), shape: '{ "statements": [ { "type": "amplify", "thread": "T3", "text": "…", "bigger": { "change": "…", "effect": "…", "because": "…" } } ] }', okLine: `${role}: ok, 2 ${word} built on`, badLine: `${role}: invalid — <first error>` };
     }
     case 'track-record': {
@@ -188,10 +208,11 @@ function turnOf(ctx, role, root) {
         const frame = loadFrame(ctx.dir);
         const base = role === 'client' ? ['_contract.md', 'proposer.md', 'client.md'] : ['_contract.md', 'proposer.md'];
         const bet = isLab(session)
-          ? '"experience": ["…", "…", "…"], "buildsOn": ["A3", "D1"], "newTo": "category", "assumptions": ["…", "…"], "riskiest": 0, "upside": "significant", "priorArt": { "exists": "partly", "searched": "…", "who": "…", "outcome": "…", "difference": "…", "evidence": ["E9"] }, "evidence": []'
+          ? '"experience": ["…", "…", "…"], "buildsOn": ["' + (isStudio(session) ? 'M2' : 'A3') + '", "D1"], "newTo": "category", "assumptions": ["…", "…"], "riskiest": 0, "upside": "significant", "priorArt": { "exists": "partly", "searched": "…", "who": "…", "outcome": "…", "difference": "…", "evidence": ["E9"] }, "evidence": []'
           : '"assumptions": ["…", "…"], "riskiest": 0, "upside": "significant", "priorArt": { "exists": "no", "searched": "…" }, "evidence": []';
-        const scale = isLab(session) ? '"effort": "medium", "scale": "feature"' : '"effort": "large", "scale": "new"';
-        const unit = isLab(session) ? 'inventions' : 'bets';
+        const design = isStudio(session) ? ' "design": { "type": "…", "colour": "…", "layout": "…", "imagery": "…", "motion": "…", "signature": { "kind": "material", "what": "…", "why": "…", "tenth": "…" }, "technology": "…", "keeps": ["…"], "breaks": [ { "what": "…", "why": "…" } ], "needs": ["…"] }, "madeFrom": "material",' : '';
+        const scale = `${isStudio(session) ? '"effort": "medium", "scale": "redesign"' : isLab(session) ? '"effort": "medium", "scale": "feature"' : '"effort": "large", "scale": "new"'},${design}`.replace(/,$/, '');
+        const unit = `${unitOf(session)}s`;
         if (passOf(session) === 2) {
           const taken = record.threads.map((t) => { const h = record.statements.find((s) => s.thread === t.id && s.type === 'hypothesis'); return { title: h.title, change: h.hypothesis.change, yours: t.by === role }; });
           return { prompts: [...base, 'proposer-second.md'], sheet: role !== 'client', digest: true, input: { name: `propose2-${role}`, data: { provocations: frame?.provocations ?? [], taken } }, cmd: cmd(`say --role ${role}`), shape: `{ "statements": [ { "type": "hypothesis", "title": "…", "hypothesis": { … }, "test": { … }, ${scale}, "provocation": "P3", ${bet} } ] }`, okLine: `${role}: ok, 2 ${unit}`, badLine: `${role}: invalid — <first error>` };
@@ -256,9 +277,27 @@ export function buildContext(ctx, { root, dir, role, phase, save }) {
   if (!seat(session, role) && !STAFF.includes(role)) throw new Error(`Unknown or missing --role "${role ?? ''}". The cast: ${session.cast.map((s) => s.role).join(', ')}; staff: ${STAFF.join(', ')}`);
   if (phase && phase !== session.phase) throw new Error(`The session is in the ${session.phase} phase, not ${phase}. See the status command for the next step.`);
   const turn = turnOf(ctx, role, root);
-  const inputs = [`- The goal of this session: **${one(session.goal)}**`, `- Project root (read-only): ${root}`];
-  if (session.url) inputs.push(`- The live ${isLab(session) && session.object?.kind && session.object.kind !== 'website' ? 'address' : 'site'}: ${session.url}. Open its pages yourself when you need to see them, and cite a page by its address.`);
-  if (isLab(session)) {
+  // The stranger who looks at the tiles is told nothing: not the goal, not the business, not the site, not the debate.
+  const blind = role === 'eye';
+  const inputs = blind ? [] : [`- The goal of this session: **${one(session.goal)}**`, `- Project root (read-only): ${root}`];
+  if (session.url && !blind) inputs.push(`- The live ${isLab(session) && session.object?.kind && session.object.kind !== 'website' ? 'address' : 'site'}: ${session.url}. Open its pages yourself when you need to see them, and cite a page by its address.`);
+  const designer = behindFirewall(session, role);
+  if (blind) { /* nothing about the thing */ } else if (isStudio(session)) {
+    if (session.object?.kind) inputs.push(`- The studio works on ${OBJECT_WORDS[session.object.kind] ?? session.object.kind}${session.url ? '' : ', which has no live address: it may not exist yet'}.`);
+    if (session.focus) inputs.push(`- The person asked the studio to look at one part of it first: **${one(session.focus)}**.`);
+    if (!['open', 'evidence'].includes(session.phase) || ['genre', 'awards', 'slop'].includes(role)) {
+      if (fs.existsSync(anatomyPath(dir))) inputs.push(`- What the studio understood about the site and the business behind it, its anatomy, with the ids a direction grows from (M… what the business has that a design could be made of, A… the parts of the site, D… what it knows, U… what the web could do for it and does not, J… journeys, W… weak spots), and what the person corrected: ${anatomyPath(dir)}`);
+      if (designer) {
+        const file = path.join(dir, 'in', `field-${role}.json`);
+        writeJson(file, designersField({ currents: loadCurrents(dir)?.currents, slop: loadSlop(dir)?.slop, genre: loadGenre(dir)?.genre }));
+        inputs.push(`- The field, as designers are given it: what wins awards now as patterns, each with how common it has become (R…), what template and machine-made sites look like (X…), and the habits (G…) and the most distinctive ideas (F…) of sites of this trade: ${file}. No site is named in it, on purpose. It is a map of what visitors have already seen, not a kit of parts.`);
+      } else if (!['genre', 'awards', 'slop'].includes(role)) {
+        if (fs.existsSync(genrePath(dir))) inputs.push(`- What sites of this trade usually have (their habits, G…) and the most distinctive of them (F…, each with its address): ${genrePath(dir)}`);
+        if (fs.existsSync(currentsPath(dir))) inputs.push(`- What wins awards now: the sites that were looked at, and the patterns they share (R…): ${currentsPath(dir)}`);
+        if (fs.existsSync(slopPath(dir))) inputs.push(`- What template and machine-made sites look like (X…): ${slopPath(dir)}`);
+      }
+    }
+  } else if (isLab(session)) {
     if (session.object?.kind) inputs.push(`- The thing the lab works on is ${OBJECT_WORDS[session.object.kind] ?? session.object.kind}${session.object.from === 'detected' ? ' (as guessed from its files)' : ''}.`);
     if (session.focus) inputs.push(`- The person asked the lab to look at one part of it first: **${one(session.focus)}**.`);
     if (!['open', 'evidence'].includes(session.phase) || role === 'genre') {
@@ -277,12 +316,18 @@ export function buildContext(ctx, { root, dir, role, phase, save }) {
     inputs.push(`- Your material for this turn: ${file}`);
   }
   inputs.push(...(turn.extra ?? []));
-  inputs.push(`- The evidence, by id, with its source and grade: ${evidencePath(dir)}`);
-  if (evidence.data?.length) inputs.push(`- Data the person shared (${evidence.data.length} files, listed under "data" in the evidence file): ${session.data}`);
-  if (evidence.missing?.length) inputs.push(`- What this session lacks: ${evidence.missing.map(one).join(' ')}`);
+  if (blind) inputs.push(`- Today: ${today()}`);
+  else if (designer) {
+    const file = path.join(dir, 'in', `evidence-${role}.json`);
+    writeJson(file, designersEvidence(evidence));
+    inputs.push(`- The evidence, by id, with its source and grade: ${file}`);
+  } else inputs.push(`- The evidence, by id, with its source and grade: ${evidencePath(dir)}`);
+  if (!blind && evidence.data?.length) inputs.push(`- Data the person shared (${evidence.data.length} files, listed under "data" in the evidence file): ${session.data}`);
+  if (!blind && evidence.missing?.length) inputs.push(`- What this session lacks: ${evidence.missing.map(one).join(' ')}`);
   if (['track-record', 'docket', 'verdict'].includes(session.phase)) inputs.push(`- The idea ledger: ${ideasPath(root)}`);
-  inputs.push(`- Today: ${today()}`);
+  if (!blind) inputs.push(`- Today: ${today()}`);
   if (isLab(session) && session.phase === 'examine' && session.step === 'attack') inputs.push(`- The kinds of attack: ${Object.entries(attackKinds(session)).map(([k, v]) => `"${k}" (${v})`).join('; ')}.`);
+  if (isStudio(session) && ['evidence', 'examine'].includes(session.phase)) inputs.push('', 'To read what a public page is built with (the libraries, frameworks and fonts its markup shows, its canvases and films, whether it answers a visitor who asked for less motion):', '', '```bash', `node "${scriptOf(session)}" probe --root "${root}" --session ${session.id} --url https://example.com/`, '```');
   if (session.phase === 'examine' || session.phase === 'propose' || session.phase === 'evidence' || session.phase === 'study') {
     inputs.push('', "To see a page as a visitor sees it (the site's, a rival's, any public page), take pictures of it on a desktop and a narrow screen, then open the files it names with your file reader:", '', '```bash', `node "${scriptOf(session)}" look --root "${root}" --session ${session.id} --url https://example.com/page`, '```');
     inputs.push('', 'To cite something that is not in the evidence yet, add it first; the reply gives you its id:', '', '```bash', `node "${scriptOf(session)}" evidence --root "${root}" --session ${session.id} --role ${role} <<'COUNCIL_JSON'`, '{ "evidence": [ { "grade": "observed", "source": "https://example.com/page", "text": "What you saw there, in one sentence" } ] }', 'COUNCIL_JSON', '```');

@@ -5,7 +5,7 @@
 // sandbox: a program written to a file and run later is not read.
 
 const WRITE_METHOD = /^(post|put|patch|delete)$/i;
-const OUR_SCRIPT = /(^|[\\/])(council|venture|lab|ph)\.mjs$/;
+const OUR_SCRIPT = /(^|[\\/])(council|venture|lab|studio|ph)\.mjs$/;
 const GUARD_FILE = /(\.project-advisory|\.project-health)[\\/]+guard\.json/;
 const CONTACT_SCHEME = /^['"]?(mailto|tel|sms|callto|sip|skype|whatsapp|tg|viber|facetime|msteams|slack|fb-messenger):/i;
 

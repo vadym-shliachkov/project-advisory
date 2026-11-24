@@ -54,9 +54,11 @@ export const KIND_TITLES = {
   convention: 'Conventions',
   constraint: 'Constraints',
   decision: 'Decisions taken',
+  preference: 'Liked',
 };
 
-// The people and ground rules, read only: they are agreed with the people who run the project, not by this skill.
+// The people and ground rules, as every member reads them. They are agreed with the people who run the project (the
+// roadmap skill); this skill adds only what the person said in a session, in their words (see notes.mjs).
 export function loadKnowledge(root) {
   const k = readJson(knowledgePath(root), null);
   return { people: k?.people ?? [], notes: k?.notes ?? [] };

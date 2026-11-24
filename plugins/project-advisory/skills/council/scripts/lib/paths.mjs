@@ -12,6 +12,7 @@ import { fileURLToPath } from 'node:url';
 //   council/<id>/  this skill's sessions, ignored by git
 //   venture/<id>/  the venture board's sessions (it runs on these scripts), ignored by git
 //   lab/<id>/      the invention lab's sessions (it runs on these scripts), ignored by git
+//   studio/<id>/   the design studio's sessions (it runs on these scripts), ignored by git
 //   cache/looks/   pictures of pages, reused for a week by any session, ignored by git
 //   runs/<id>/     written by the project-health skill; read here when it exists, never written
 export const SKILL_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
@@ -21,14 +22,19 @@ export const projectDir = (root) => path.join(root, PROJECT_DIR);
 export const bankDir = (root) => path.join(projectDir(root), 'kb');
 export const councilDir = (root) => path.join(projectDir(root), 'council');
 
-// Three skills run on these scripts. The council improves what the business has; the venture board looks for what the
+// Four skills run on these scripts. The council improves what the business has; the venture board looks for what the
 // business could start, sell or become; the invention lab invents new things for the thing itself (the site, the app,
-// the tool). Each has its own prompts, cast and cards in its skill folder, beside this one, and its own sessions.
-export const KINDS = ['council', 'venture', 'lab'];
+// the tool); the design studio looks for what the site could look, read and move like. Each has its own prompts, cast
+// and cards in its skill folder, beside this one, and its own sessions.
+export const KINDS = ['council', 'venture', 'lab', 'studio'];
 export const VENTURE_DIR = path.resolve(SKILL_DIR, '..', 'venture');
 export const LAB_DIR = path.resolve(SKILL_DIR, '..', 'lab');
-const KIND_DIRS = { council: SKILL_DIR, venture: VENTURE_DIR, lab: LAB_DIR };
-export const LABELS = { council: 'Council', venture: 'Venture board', lab: 'Invention lab' };
+export const STUDIO_DIR = path.resolve(SKILL_DIR, '..', 'studio');
+const KIND_DIRS = { council: SKILL_DIR, venture: VENTURE_DIR, lab: LAB_DIR, studio: STUDIO_DIR };
+export const LABELS = { council: 'Council', venture: 'Venture board', lab: 'Invention lab', studio: 'Design studio' };
+// Where a session's prompts are looked for, in order. The studio runs the lab's kind of session (it studies the thing,
+// frames, deals cards, builds on every idea), so a prompt it does not have of its own is the lab's, then the council's.
+export const promptDirs = (kind = 'council') => [...new Set([skillDirOf(kind), ...(kind === 'studio' ? [LAB_DIR] : []), SKILL_DIR])].map((d) => path.join(d, 'agents'));
 export const kindOf = (session) => (KINDS.includes(session?.kind) ? session.kind : 'council');
 export const skillDirOf = (kind = 'council') => KIND_DIRS[kind] ?? SKILL_DIR;
 export const labelOf = (kind = 'council') => LABELS[kind] ?? LABELS.council;
@@ -39,7 +45,7 @@ export const runsDir = (root) => path.join(projectDir(root), 'runs');
 // Sessions are working files: the bank is what is kept. Adds the lines to the shared .gitignore, creating the file
 // with the lines the project-health skill expects when it is not there yet: the sessions of the three skills, the
 // cache of pictures of pages they share, and the page of every idea built from the ledger.
-const IGNORED = ['council/', 'venture/', 'lab/', 'cache/', 'ideas.html'];
+const IGNORED = ['council/', 'venture/', 'lab/', 'studio/', 'cache/', 'ideas.html'];
 export function ignoreSessions(root) {
   const file = path.join(projectDir(root), '.gitignore');
   const exists = fs.existsSync(file);

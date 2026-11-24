@@ -37,6 +37,9 @@
         "riskiest": { "type": "string", "minLength": 10, "description": "The venture board's or the invention lab's word on the assumption most likely to be false" },
         "newTo": { "type": "string", "enum": ["world", "category", "here"], "description": "The invention lab's word on how new an invention is: nothing like it anywhere, new to things of its kind, or new only to this one" },
         "feasible": { "type": "string", "enum": ["now", "stretch", "research"], "description": "The invention lab's word on whether the thing as it is built could do it" },
+        "swap": { "type": "string", "enum": ["own", "sector", "anyone"], "description": "The design studio's swap test: with a rival's name on it the direction would be wrong (own), or it would fit any business of the trade, or almost any business" },
+        "madeFrom": { "type": "string", "enum": ["material", "idea", "far-field", "assembly"], "description": "The design studio's word on what a direction is made from: something the business has, one idea about it, a field far from the web, or known patterns of the web joined" },
+        "signature": { "type": "string", "enum": ["keep", "quieter", "drop", "none"], "description": "The design studio's ruling on a direction's signature moment" },
         "session": { "type": "string" }
       }
     },
@@ -51,7 +54,7 @@
       }
     },
     "effort": { "type": "string", "enum": ["small", "medium", "large"] },
-    "scale": { "type": "string", "enum": ["adjustment", "addition", "direction", "new", "feature", "product", "remake"], "description": "How far the idea reaches. The council and the venture board: a change to what is there, something new beside it, a remake of what is there, or something the business does not do or have at all. The invention lab: a new capability inside the thing, a new thing built from it, or a remake of how it works" },
+    "scale": { "type": "string", "enum": ["adjustment", "addition", "direction", "new", "feature", "product", "remake", "refresh", "redesign", "reinvention"], "description": "How far the idea reaches. The council and the venture board: a change to what is there, something new beside it, a remake of what is there, or something the business does not do or have at all. The invention lab: a new capability inside the thing, a new thing built from it, or a remake of how it works. The design studio: a new look on the structure the site has, a new structure as well, or a site of a different kind" },
     "novelty": { "type": "string", "enum": ["fresh", "familiar"], "description": "The judge's word at the docket: fresh when it could only come from looking at this project and its market, familiar when any adviser would give it to any firm of this kind" },
     "priorArt": {
       "type": "object",
@@ -65,7 +68,7 @@
         "difference": { "type": "string", "minLength": 20, "description": "How this idea differs from what exists" }
       }
     },
-    "origin": { "type": "string", "enum": ["council", "venture", "lab"], "description": "The skill whose session proposed it; council when missing" },
+    "origin": { "type": "string", "enum": ["council", "venture", "lab", "studio"], "description": "The skill whose session proposed it; council when missing" },
     "ventureCandidate": { "type": "boolean", "description": "Killed or narrowed in the council for reaching further than it could test: worth taking to the venture board" },
     "where": {
       "type": "array",

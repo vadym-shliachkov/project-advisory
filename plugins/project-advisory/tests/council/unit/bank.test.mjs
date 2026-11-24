@@ -173,7 +173,7 @@ test('the digest holds the goal, market, numbers, rules, plans and the whole led
 
 test('an empty project gives a digest that says nothing is recorded; old numbers are marked', () => {
   const root = tmpDir();
-  assert.equal(COMMANDS.digest({ root }).match(/None recorded yet\./g).length, 9);
+  assert.equal(COMMANDS.digest({ root }).match(/None recorded yet\./g).length, 10);
   write(kb(root, 'facts.json'), { facts: [{ key: 'metric.visits', value: 310, source: 'data/ga.csv', confidence: 'high', observedAt: '2026-01-01', by: 'council', history: [] }] });
   assert.match(digest(root), /`metric\.visits`: 310 .* — older than 45 days, treat with care/);
   ideaSave({ root, by: 'council' }, stdin({ ideas: [idea(1)] }));
@@ -188,12 +188,12 @@ test('sessions are ignored by git; the shared .gitignore keeps what it had', () 
   const root = tmpDir();
   ignoreSessions(root);
   const file = path.join(root, '.project-health', '.gitignore');
-  assert.equal(fs.readFileSync(file, 'utf8'), 'runs/\nprofile.json\nlatest.json\ncouncil/\nventure/\nlab/\ncache/\nideas.html\n');
+  assert.equal(fs.readFileSync(file, 'utf8'), 'runs/\nprofile.json\nlatest.json\ncouncil/\nventure/\nlab/\nstudio/\ncache/\nideas.html\n');
   ignoreSessions(root);
-  assert.equal(fs.readFileSync(file, 'utf8'), 'runs/\nprofile.json\nlatest.json\ncouncil/\nventure/\nlab/\ncache/\nideas.html\n');
+  assert.equal(fs.readFileSync(file, 'utf8'), 'runs/\nprofile.json\nlatest.json\ncouncil/\nventure/\nlab/\nstudio/\ncache/\nideas.html\n');
   fs.writeFileSync(file, 'runs/\nnotes.txt');
   ignoreSessions(root);
-  assert.equal(fs.readFileSync(file, 'utf8'), 'runs/\nnotes.txt\ncouncil/\nventure/\nlab/\ncache/\nideas.html\n');
+  assert.equal(fs.readFileSync(file, 'utf8'), 'runs/\nnotes.txt\ncouncil/\nventure/\nlab/\nstudio/\ncache/\nideas.html\n');
 });
 
 test('the bank refuses the usual shapes of secrets', () => {

@@ -15,6 +15,8 @@ export const KIND_TITLES = {
   convention: 'Conventions',
   constraint: 'Constraints',
   decision: 'Decisions taken',
+  // Saved by a council, venture board, invention lab or design studio session, in the person's words.
+  preference: 'Liked',
 };
 
 export const knowledgePath = (root) => path.join(healthDir(root), 'kb', 'knowledge.json');

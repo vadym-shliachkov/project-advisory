@@ -1,8 +1,8 @@
 {
   "name": "project-advisory",
-  "version": "0.6.0",
-  "description": "Advice for a web project: a health check with a branded PDF report, an implementation roadmap, a weekly council that proposes and stress-tests ideas for growth, a venture board for what the business could become, and an invention lab that invents new things for the site, app or tool itself.",
+  "version": "0.7.0",
+  "description": "Advice for a web project: a health check with a branded PDF report, an implementation roadmap, a weekly council that proposes and stress-tests ideas for growth, a venture board for what the business could become, an invention lab that invents new things for the site, app or tool itself, and a design studio that finds what a site could look, read and move like without copying or falling back on a template.",
   "author": { "name": "Vadym Shliachkov" },
   "license": "MIT",
-  "keywords": ["audit", "seo", "performance", "security", "health-check", "roadmap", "strategy", "growth", "red-team", "innovation", "triz", "design-thinking"]
+  "keywords": ["audit", "seo", "performance", "security", "health-check", "roadmap", "strategy", "growth", "red-team", "innovation", "triz", "design-thinking", "web-design", "art-direction"]
 }

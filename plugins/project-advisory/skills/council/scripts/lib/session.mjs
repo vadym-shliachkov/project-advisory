@@ -13,10 +13,14 @@ export const DEFAULT_GOAL = 'Make potential clients see clearly what the busines
 export const VENTURE_GOAL = 'Find what the business could start, sell, build or become that would change its results far more than improving what it already has';
 // The invention lab asks about the thing itself: what it could do, have or become that nobody has made yet.
 export const LAB_GOAL = 'Invent things this project could do, have or become that nobody has made yet, grown from what it already is and from the people who use it';
+// The design studio asks what the site could look, read and move like: a direction that could only be this business's.
+export const STUDIO_GOAL = 'Find what this site could look, read and move like that could only be this business, grown from what it has and does, and not from what other sites look like';
 export const DEFAULT_BUDGET = 60;
 // The lab studies the thing before anyone invents, debates for up to three rounds and writes the minutes and a sketch
 // of every invention that survives: it needs more runs than the council.
 export const LAB_BUDGET = 80;
+// The studio has one seat and two scouts more than the lab, and builds a working tile of every direction that survives.
+export const STUDIO_BUDGET = 100;
 // Runs kept back for the verdict and the two documents, so a long debate cannot leave the session without a result.
 export const RESERVE = 12;
 export const MAX_ROUNDS = 3;
@@ -29,12 +33,16 @@ export const VENTURE_PHASES = ['open', 'evidence', 'frame', 'propose', 'amplify'
 // frames, provokes, invents, builds on every invention, and debates them as the council does.
 export const LAB_PHASES = ['open', 'evidence', 'study', 'frame', 'propose', 'amplify', 'docket', 'examine', 'verdict', 'set', 'write', 'review', 'close', 'done'];
 export const isVenture = (session) => session?.kind === 'venture';
-export const isLab = (session) => session?.kind === 'lab';
+export const isStudio = (session) => session?.kind === 'studio';
+export const isInventionLab = (session) => session?.kind === 'lab';
+// The design studio runs the lab's kind of session (the study, the frame, the cards, building on every idea, three
+// rounds, the set) on a subject of its own: what is true of a lab session here is true of a studio session too.
+export const isLab = (session) => isInventionLab(session) || isStudio(session);
 // Both the venture board and the lab frame the problem, provoke, deal cards and build on every idea before the docket.
 export const isFramed = (session) => isVenture(session) || isLab(session);
 export const maxRounds = (session) => (isVenture(session) ? VENTURE_ROUNDS : MAX_ROUNDS);
 export const phasesOf = (session) => (isLab(session) ? LAB_PHASES : isVenture(session) ? VENTURE_PHASES : PHASES);
-const GOALS = { council: DEFAULT_GOAL, venture: VENTURE_GOAL, lab: LAB_GOAL };
+const GOALS = { council: DEFAULT_GOAL, venture: VENTURE_GOAL, lab: LAB_GOAL, studio: STUDIO_GOAL };
 export const defaultGoal = (kind = 'council') => GOALS[kind] ?? DEFAULT_GOAL;
 const DEBATE = ['open', 'evidence', 'track-record', 'study', 'frame', 'propose', 'amplify', 'docket', 'examine'];
 // The judge's docket is paid like the verdict, from the reserve when it must be: without it the session can neither go
@@ -81,7 +89,7 @@ function goalFor(root, given, kind) {
 export function createSession(root, { goal, url, data, budget, kind = 'council', object = null, focus = null, date = today() } = {}) {
   const unfinished = listSessions(root, kind).reverse().find((s) => loadSession(root, s, kind).session.phase !== 'done');
   if (unfinished) throw new Error(`Session ${unfinished} is not finished (phase: ${loadSession(root, unfinished, kind).session.phase}). Continue it with --session ${unfinished}, or set it aside with "close --abandon --session ${unfinished}".`);
-  const total = budget === undefined ? (kind === 'lab' ? LAB_BUDGET : DEFAULT_BUDGET) : Number(budget);
+  const total = budget === undefined ? ({ lab: LAB_BUDGET, studio: STUDIO_BUDGET }[kind] ?? DEFAULT_BUDGET) : Number(budget);
   if (!Number.isInteger(total) || total < RESERVE + 10) throw new Error(`--budget must be a whole number of at least ${RESERVE + 10}: a session needs about ${DEFAULT_BUDGET} agent runs, ${RESERVE} of them for the verdict and the documents.`);
   let dataDir = null;
   if (data) {
@@ -98,7 +106,7 @@ export function createSession(root, { goal, url, data, budget, kind = 'council',
   const session = {
     id, ...(kind !== 'council' ? { kind } : {}), ...goalFor(root, goal, kind),
     // The thing the lab works on: what kind of thing it is, and the part of it the person asked the lab to look at.
-    ...(kind === 'lab' ? { object, ...(focus?.trim() ? { focus: focus.trim() } : {}) } : {}), url: url ?? health?.url ?? null, data: dataDir, run: health?.id ?? null,
+    ...(['lab', 'studio'].includes(kind) ? { object, ...(focus?.trim() ? { focus: focus.trim() } : {}) } : {}), url: url ?? health?.url ?? null, data: dataDir, run: health?.id ?? null,
     budget: total, runs: 0, closing: false,
     phase: 'open', round: 0, step: null,
     cast: loadCast(kind).seats, assignments: {}, turns: [], log: [], createdAt: new Date().toISOString(),

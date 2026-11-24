@@ -1,6 +1,6 @@
 # project-advisory
 
-A Claude Code and Codex plugin with five skills for a web project, all under one name:
+A Claude Code and Codex plugin with six skills for a web project, all under one name:
 
 | Command | What it does |
 |---|---|
@@ -9,6 +9,7 @@ A Claude Code and Codex plugin with five skills for a web project, all under one
 | `/project-advisory:council` | Weekly council of role agents that proposes ideas for growth and tries to kill them. |
 | `/project-advisory:venture` | Venture board, monthly or quarterly, that looks for what the business could start, sell, build or become. |
 | `/project-advisory:lab` | Invention lab that studies the site, app or tool itself and invents new things it could do, that nothing of its kind has. |
+| `/project-advisory:studio` | Design studio that finds what a site could look, read and move like, made of what the business has, and builds a working tile of each direction that survives. |
 
 No skill ever submits a form or contacts a real company or person. Every agent is told so, and on Claude Code a hook enforces it (see [No-contact guard](#no-contact-guard)).
 
@@ -62,7 +63,7 @@ enabled = true
 /project-advisory:project-health backlog
 ```
 
-In Codex, mention the skill (`$project-health`, `$roadmap`, `$council`, `$venture`, `$lab`) with the same arguments.
+In Codex, mention the skill (`$project-health`, `$roadmap`, `$council`, `$venture`, `$lab`, `$studio`) with the same arguments.
 
 ### Implementation roadmap
 
@@ -80,7 +81,7 @@ The roadmap skill acts as the facilitator of a planning discussion. It goes thro
 
 Progress lives in `runs/<run>/roadmap.json`. The roadmap will not render while any problem is open, any fix plan is a draft, or any task lacks a person or an estimate.
 
-The knowledge base is `kb/knowledge.json`, with a readable `kb/knowledge.md` next to it. It holds the people, key features, what is allowed and not allowed, conventions, constraints and decisions. It outlives the run, and later analyses and plans respect it.
+The knowledge base is `kb/knowledge.json`, with a readable `kb/knowledge.md` next to it. It holds the people, key features, what is allowed and not allowed, conventions, constraints and decisions. It outlives the run, and later analyses and plans respect it. The council, the venture board, the invention lab and the design studio add to it what the person says when they turn something down for a reason that reaches past that one idea, or ask for more of something (see [What the person says](#what-the-person-says)).
 
 | Option | Effect |
 |---|---|
@@ -158,6 +159,33 @@ A framer then sets the problem with TRIZ and design thinking (the ideal result, 
 
 Each session ends with a decision brief, the inventions (each with a sketch of what it could look like, how a person would live it, why it is new, what it grows from, the smallest prototype and what it survived), the discussion (the debate as the minutes of a society of inventors) and the session's pages. Its research is kept in the knowledge bank: the anatomy is reused while the project's code has not changed.
 
+## Design studio
+
+```text
+/project-advisory:studio [path] [--url <https://…>] [--focus "<part>"] [--goal "<text>"] [--data <folder>] [--budget <n>]
+```
+
+Finds what a site could look, read and move like, for a site that exists or one not built yet. It is made to avoid three things: a copy (a site that exists, or one effect lifted from one), a collection (effects seen here and there with nothing holding them together) and slop (the look of a template or of a machine's defaults).
+
+It starts by studying. An anatomist reads the project, the live pages and what the person says about the business, and names **what the business has that a design could be made of**: its work, its product, its place, its people, its archive, its numbers, its words. A sector scout lists how sites of the trade work and the most distinctive of them. An awards scout looks at what wins awards now: for each honoured site its one idea, how it moves, its signature moment and what it is built with, which the `probe` command reads from the page's markup (libraries, frameworks, fonts, canvases, whether it answers a visitor who asked for less motion); then the patterns the sites share, each written as what it does for the visitor and marked with how common it has become. A slop scout lists what template and machine-made sites look like now. A voice scout gathers what customers say, and a craft scan finds what the web can now do for type and motion. The person sees what the studio understood and corrects it before anyone designs.
+
+A framer sets the problem and a provocateur writes absurd statements. Seven seats then propose whole directions from cards dealt to them, each starting from a different place: the visitor, the business's own material, one idea about the business, fields far from the web (print, film, exhibitions, buildings, books), type and movement, the provocations, and one seat only from the known patterns of the web. **The designers are not shown the other sites**: they are handed the patterns with no site named, and the evidence of the scouts with its addresses withheld, so nothing can be copied; only the examiner and the judge see the sites. A direction is one idea and the type, colour, layout, imagery, motion and technology that follow from it. It says whether the site needs a signature moment at all, of what kind (craft, the business's own material, a story, something to play with, a spectacle, speed, wit, or none), why, and what it is like on the tenth visit. It says what it is made from; a direction made by joining known patterns is allowed, must say what the whole is that none of its parts is, and a seat may send only one.
+
+Another seat takes every direction further, the judge turns away what sites of the trade already look like and what is made of the tells of a template, and an examiner and the other seats attack each direction over up to three rounds: is it a copy, an assembly of effects, generic (the swap test: would it look right with a rival's name on it), a template; does the signature moment serve the visitor; would visitors find what they came for; can it be built, can the business feed it, can everyone use it. A judge who took no part rules on each: whether it survived, the swap test, how new it is, what it is made from, what becomes of its signature moment, how feasible it is. Nothing is ranked: a site takes one direction, and choosing it is the owner's.
+
+Every direction that survives is built as a **tile**: one small working page with the real type, colours and movement, showing the first screen and the signature moment. A tile is one file that may load fonts and nothing else; the script adds a rule under which the browser refuses every other request. A stranger who was told nothing then looks at pictures of the tiles and says what business each seems to be for, whether it would fit a rival, what it brings to mind and which tells of a template it shows; a tile the stranger could not place goes back to the prototyper once.
+
+Each session ends with a decision brief, the directions (each with a picture of its tile, what the stranger saw, the design, the values of the tile, and what the studio found in the field), the tiles to open in a browser, a **handoff file** per direction for whoever builds the site (the idea, the values, the rules of the direction, what the business must supply and what not to do), and the session's pages.
+
+## What the person says
+
+When the person turns an idea down, the ledger keeps the idea with their reason, and it is not proposed again. When the reason reaches past that one idea ("no dark backgrounds: our customers are over sixty"), it is a rule, and the usher of any of the four debating skills saves it as a note in `kb/knowledge.json`, in the person's words, with the idea it was said of; a strong "more of this" is saved as a preference. When it is not clear whether a reason is a rule, the usher asks once. Every later session, of any of the skills, reads the notes: nothing a rule forbids is proposed under another name, and the judge's docket refuses what slipped through. Only the person retires a note.
+
+```bash
+node plugins/project-advisory/skills/council/scripts/council.mjs note --root <project> --show
+node plugins/project-advisory/skills/council/scripts/council.mjs note --root <project> --retire K3
+```
+
 ## No-contact guard
 
 The plugin ships a `PreToolUse` hook (`hooks/hooks.json`, `hooks/no-contact.mjs`) that refuses a tool call which would submit a form, send a message, a post, an issue or a push, or otherwise send data to a site:
@@ -167,7 +195,7 @@ The plugin ships a `PreToolUse` hook (`hooks/hooks.json`, `hooks/no-contact.mjs`
 
 Reading is never refused: opening and fetching pages, searching, pictures of pages, reading files, read-only `git` and `gh`, and the plugin's own scripts, whatever their input quotes.
 
-It applies always inside the plugin's own subagents (`member`, `area-analyst`, `writer`, which have no browser tools at all), and in the main session while a skill runs: every command of the skills' scripts arms it for two hours, and closing a council, venture or lab session lifts it. It is armed for the user, so every Claude Code window is guarded meanwhile. To lift it at once, run in your own terminal:
+It applies always inside the plugin's own subagents (`member`, `area-analyst`, `writer`, which have no browser tools at all), and in the main session while a skill runs: every command of the skills' scripts arms it for two hours, and closing a council, venture, lab or studio session lifts it. It is armed for the user, so every Claude Code window is guarded meanwhile. To lift it at once, run in your own terminal:
 
 ```bash
 node "<plugin folder>/hooks/guard.mjs" off      # or: status

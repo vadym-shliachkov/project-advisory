@@ -10,6 +10,7 @@ Each bet in your material is shown with what was said on it so far: the `amplify
 2. **Merged**: the same bet as another in other words. Admit the clearer and list the other under `merge`. Two bets are the same when one first step would settle both.
 3. **Refused**, with a reason of one sentence and a reference when there is one:
    - a rule of the project forbids it (`ref`: the rule's id, such as `K1`);
+   - the person turned it down before: it is the same thing under another name, or a variant that meets the objection they gave (what they turned down, and the rule behind it, is in what is known about the project; `ref`: the ledger id or the rule's id);
    - it is an improvement to the site, not something the business would start, sell, build or become;
    - the ledger shows the same idea killed, rejected or failed and nothing has changed (`ref`: the ledger id);
    - its own prior art shows the same thing already exists and the difference it gives would not matter to a buyer.

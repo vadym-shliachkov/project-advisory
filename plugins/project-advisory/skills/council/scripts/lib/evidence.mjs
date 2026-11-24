@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { readJson, writeJson } from './io.mjs';
 import { loadFacts, today, latestHealthRun, latestRoadmap } from './bank.mjs';
-import { reusable } from './groundwork.mjs';
+import { reusable, turnKind } from './groundwork.mjs';
 
 // What the council may cite. Every entry has an id, a source, a date and a grade:
 //   measured: a number from data the person shared;
@@ -15,7 +15,7 @@ const FACT_REF = /^fact\s+([a-z0-9-]+(?:\.[a-zA-Z0-9-]+)+)$/;
 const PROBE_MAX_AGE_DAYS = 7;
 const TEXT_MAX = 500;
 // Facts worth citing in a debate about growth; what the health areas recorded about hosting or code is not.
-const FACT_GROUPS = ['business', 'conversion', 'team', 'site', 'brand', 'market', 'metric'];
+const FACT_GROUPS = ['business', 'conversion', 'team', 'site', 'brand', 'market', 'metric', 'studio'];
 // The areas of a health check that describe what a visitor or a search engine meets. Their findings are given in
 // full. The others (how the code, the releases and the server are kept) are given by their title: enough to cite
 // and to look up, without making every member read them at length.
@@ -94,7 +94,7 @@ export function addEvidence(evidence, items, { by, root, session, date = today()
     if (item.grade !== 'argued' && !one(item.source)) { errors.push(`${at}.source: ${item.grade} evidence needs its source`); return; }
     // An opening from the horizon scan is a change in the world, and a line of the primer a fact about the trade:
     // without the page that reports it, either is a guess.
-    if (['horizon', 'primer', 'tech', 'genre'].includes(by) && !/^https?:\/\/\S+$/i.test(one(item.source))) { errors.push(`${at}.source: ${by === 'primer' ? 'a fact about the trade' : by === 'genre' ? 'a fact about things of this kind' : 'an opening'} needs the address of the page that reports it, and its "date" when the page gives one`); return; }
+    if (['horizon', 'primer', 'tech', 'genre', 'awards', 'slop'].includes(by) && !/^https?:\/\/\S+$/i.test(one(item.source))) { errors.push(`${at}.source: ${by === 'primer' ? 'a fact about the trade' : by === 'genre' ? 'a fact about things of this kind' : by === 'awards' ? 'what an honoured site does' : by === 'slop' ? 'a tell of a template site' : 'an opening'} needs the address of the page that ${['awards', 'slop'].includes(by) ? 'shows' : 'reports'} it, and its "date" when the page gives one`); return; }
     const { grade, warning } = gradeFor(item, { root, session, facts });
     if (warning) warnings.push(warning);
     const source = one(item.source) || null;
@@ -143,7 +143,7 @@ export function collectEvidence(root, session, { date = today(), refresh = [], h
       add('observed', session.url, `The live site as the health check read it on ${health.date}: its pages, headers and response times are in ${health.live}`, 'project-health', health.date);
     }
   } else {
-    missing.push('No health check has been run on this project, so the evidence has no findings. Running the project-health skill first gives the council more to work from.');
+    missing.push('No health check has been run on this project, so the evidence has no findings. Running the project-health skill first gives a session more to work from.');
   }
 
   for (const f of loadFacts(root)) {
@@ -155,13 +155,15 @@ export function collectEvidence(root, session, { date = today(), refresh = [], h
   const data = dataInventory(session.data);
   if (!session.data) missing.push('No data was shared (analytics, search console, enquiries), so nothing in this session is measured: ideas rest on what can be seen and argued.');
   else if (!data.length) missing.push(`The data folder ${session.data} is empty.`);
-  if (!session.url && session.kind === 'lab') missing.push('No live address was given, so the thing is studied from its files only: the anatomist reads the project, and nobody sees it running.');
+  if (!session.url && session.kind === 'studio') missing.push('No live address was given: the site is studied from the project\'s files and from what the person said about the business, and nobody sees it as a visitor does. For a site that does not exist yet, that is all there is.');
+  else if (!session.url && session.kind === 'lab') missing.push('No live address was given, so the thing is studied from its files only: the anatomist reads the project, and nobody sees it running.');
   else if (!session.url) missing.push('No live site address is known, so the site itself could not be looked at.');
 
   const reused = [];
   for (const { kind, record } of reusable(root, session, { refresh, date, head })) {
     for (const e of record.entries ?? []) entries.push({ ...e, id: nextId(entries), reusedFrom: `${record.by?.skill ?? 'council'} ${record.by?.session ?? record.at}` });
-    reused.push({ kind, at: record.at, from: record.by ?? null, entries: (record.entries ?? []).length });
+    // A record is named by the turn it stands for: the studio's own anatomy is still "anatomy" to the session.
+    reused.push({ kind: turnKind(kind), record: kind, at: record.at, from: record.by ?? null, entries: (record.entries ?? []).length });
   }
 
   return { entries, data, missing, site, reused, collectedAt: new Date().toISOString() };

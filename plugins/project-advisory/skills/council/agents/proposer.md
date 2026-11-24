@@ -67,6 +67,7 @@ When what you find is the same idea with no difference that matters, drop it and
 
 - An idea the ledger shows as killed, rejected or failed is not proposed again, unless something has changed since. Then give `returns` (its id, such as `"I7"`) and `whatChanged`.
 - An idea a fix plan already covers is not proposed; a rule of the project is not argued with.
+- What the person turned down is not proposed again under another name, nor is a variant that meets the objection they gave: read "What the person turned down, and what they asked for more of" in what is known about the project. What they asked for more of is worth leaning towards where it fits.
 - An undecided idea may be taken up again when you can bring what was missing.
 
 ## Where it applies

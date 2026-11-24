@@ -10,6 +10,8 @@ import { esc, rich, paras, page, css, readerText, stamp, tag, table, evidenceTex
 import { briefSections, namer, ideaTags, killedRows, labelOf } from './brief.mjs';
 import { betArticle, originLine } from './venturedoc.mjs';
 import { inventionArticle, anatomySection, frameSection } from './inventdoc.mjs';
+import { directionArticle, fieldSection, understoodSection, studioMethod, FRAME_WORDS } from './directiondoc.mjs';
+import { STUDIO_ATTACK_KINDS } from './direction.mjs';
 import { loadCards } from './frame.mjs';
 
 // The session as linked pages, in `<session>/site/`: the brief and a table of every idea on the first page, one page
@@ -27,7 +29,7 @@ const STATEMENT = {
   hypothesis: () => 'Proposed',
   steelman: () => 'Restated at its strongest',
   'steelman-reply': (s) => (s.accepts ? 'The restatement accepted' : 'The restatement corrected'),
-  attack: (s) => `Attack: ${ATTACK_KINDS[s.kind] ?? LAB_ATTACK_KINDS[s.kind] ?? s.kind}`,
+  attack: (s) => `Attack: ${ATTACK_KINDS[s.kind] ?? LAB_ATTACK_KINDS[s.kind] ?? STUDIO_ATTACK_KINDS[s.kind] ?? s.kind}`,
   client: (s) => `The customer's voice: ${({ yes: 'would care', no: 'would not care', unsure: 'not sure a customer would care' })[s.cares] ?? s.cares}`,
   reply: (s) => `Reply: ${({ refute: 'refuted', narrow: 'narrowed the idea', concede: 'conceded' })[s.stance] ?? s.stance}`,
   question: (s) => `Question for ${s.for === 'data' ? 'the data' : 'the person'}`,
@@ -48,7 +50,7 @@ function linked(text, { up, evidenceIds, threadPage }) {
     .replace(/\bT(\d{1,3})\b/g, (m) => (threadPage(m) ? `<a href="${up}${threadPage(m)}">${m}</a>` : m));
 }
 
-export function buildSite({ ctx, root, frame = null, model, suggestions, discussion = null, picture = () => null, parts = () => [], anatomy = null, genre = null, sketches = [] }) {
+export function buildSite({ ctx, root, frame = null, model, suggestions, discussion = null, picture = () => null, parts = () => [], anatomy = null, genre = null, sketches = [], currents = null, slop = null, tiles = [], tilePictures = () => ({}), eye = null, briefTile = () => null }) {
   const { dir, session, evidence } = ctx;
   const out = path.join(dir, SITE);
   fs.rmSync(out, { recursive: true, force: true });
@@ -70,7 +72,8 @@ export function buildSite({ ctx, root, frame = null, model, suggestions, discuss
   const partsAt = (up) => (thread) => parts(thread).map((p) => ({ ...p, file: fromSession(up, p.file) }));
   const pictureAt = (up) => (url) => { const pic = picture(url); return pic ? { ...pic, src: fromSession(up, pic.src) } : null; };
   const label = labelOf(model);
-  const cards = ['venture', 'lab'].includes(model.session.kind) ? loadCards(model.session.kind) : [];
+  const cards = ['venture', 'lab', 'studio'].includes(model.session.kind) ? loadCards(model.session.kind) : [];
+  const studio = model.session.kind === 'studio';
   const voice = voiceOf(model);
   const shell = (up, current, title, body, kind = 'site') => page({ title: `${title} · ${label} ${session.id}`, bandTitle: title, kind, model, body, stylesheet: `${up}style.css`, nav: nav(up, current, { discussion: chapters.length }) });
   const files = [];
@@ -136,7 +139,7 @@ ${model.refused.length || model.merged.length ? `<h3>Not debated</h3>${table('re
   });
 })();
 </script>`;
-  put('index.html', shell('', 'index.html', `${label} · Decision brief`, briefSections({ model, suggestions: suggestions ?? {}, ideaHref: ideaFile, more: all }), 'site decision-brief'));
+  put('index.html', shell('', 'index.html', `${label} · Decision brief`, briefSections({ model, suggestions: suggestions ?? {}, ideaHref: ideaFile, more: all, tile: briefTile }), 'site decision-brief'));
 
   // ---- One page per idea ----
   model.ideas.forEach((idea, at) => {
@@ -144,7 +147,10 @@ ${model.refused.length || model.merged.length ? `<h3>Not debated</h3>${table('re
     const n = chapterNo(idea.thread);
     const debate = n ? `<p><a href="${up}discussion/${n}.html">Chapter ${roman(n)} of the discussion</a> tells the debate on this idea as a conversation; the plain record of what was said is below.</p>` : '';
     let body;
-    if (written.has(idea.id) && idea.invention) {
+    if (written.has(idea.id) && idea.direction) {
+      // The tiles, their pictures and the handoff files sit in the session folder, one level above the site.
+      body = directionArticle(idea, written.get(idea.id), numberOf.get(idea.id), { frame, cards, parts: partsAt(up), plain, anatomy, tiles, pictures: tilePictures, eye, at: (rel) => `${up}../${rel}` });
+    } else if (written.has(idea.id) && idea.invention) {
       body = inventionArticle(idea, written.get(idea.id), numberOf.get(idea.id), { frame, cards, parts: partsAt(up), plain, anatomy, sketches });
     } else if (written.has(idea.id) && idea.bet) {
       body = betArticle(idea, written.get(idea.id), numberOf.get(idea.id), { frame, cards, parts: partsAt(up), plain });
@@ -230,8 +236,8 @@ ${pager}`;
   const key = `<h4>How well an idea is supported</h4>${table('key', ['Support', 'What it means'], Object.entries(STRENGTH_NOTE).map(([k, v]) => `<tr><td>${tag(k, k)}</td><td>${esc(v)}</td></tr>`))}
 <h4>How far an idea reaches</h4>${table('key', ['Scale', 'What it means'], Object.entries(SCALE_NOTE).map(([k, v]) => `<tr><td>${tag(k, `scale-${k}`)}</td><td>${esc(v)}</td></tr>`))}`;
   // The lab's method page also shows what it understood about the thing, and the frame it worked from.
-  const understood = model.session.kind === 'lab' ? `${anatomySection(anatomy, genre, model)}\n${frameSection(frame, model, plain)}` : '';
-  put('method.html', shell('', 'method.html', `${label} · Method`, `${understood}\n${methodSection(model, key)}`, 'site suggestions'));
+  const understood = studio ? `${fieldSection({ currents, slop, genre })}\n${understoodSection(anatomy, model)}\n${frameSection(frame, model, plain, FRAME_WORDS)}` : model.session.kind === 'lab' ? `${anatomySection(anatomy, genre, model)}\n${frameSection(frame, model, plain)}` : '';
+  put('method.html', shell('', 'method.html', `${label} · Method`, `${understood}\n${studio ? studioMethod(model) : methodSection(model, key)}`, 'site suggestions'));
 
   const history = buildHistory(root);
   return { dir: out, index: path.join(out, 'index.html'), pages: files.length, history };
@@ -273,7 +279,7 @@ export function buildHistory(root, { date = today() } = {}) {
   const recent = ideas.filter(changedLatest);
   const rest = ideas.filter((i) => !changedLatest(i));
   const list = sessions.length ? `<ul>${[...sessions].reverse().map((s) => { const rel = `${s.skill}/${s.id}/${SITE}/index.html`; const has = fs.existsSync(path.join(projectDir(root), rel)); return `<li>${has ? `<a href="${esc(rel)}">` : ''}${esc(kindLabel(s.skill))}, ${esc(longDate(s.id))}${has ? '</a>' : ''}</li>`; }).join('')}</ul>` : '<p>No session yet.</p>';
-  const body = `<section class="glance"><p class="eyebrow">Every session</p><p class="goal">Every idea the council, the venture board and the invention lab have looked at, and what became of it.</p></section>
+  const body = `<section class="glance"><p class="eyebrow">Every session</p><p class="goal">Every idea the council, the venture board, the invention lab and the design studio have looked at, and what became of it.</p></section>
 ${recent.length ? `<section class="b-part"><h2>Changed in the latest session</h2><p class="lead">${esc(kindLabel(latest.skill))}, ${esc(longDate(latest.id))}.</p><div class="table-box">${table('history', head, recent.map(row))}</div></section>` : ''}
 <section class="b-part"><h2>${recent.length ? 'All the other ideas' : 'All ideas'}</h2>${rest.length ? `<div class="table-box">${table('history', head, rest.map(row))}</div>` : '<p class="lead">None.</p>'}</section>
 <section class="b-part"><h2>The sessions</h2>${list}</section>`;

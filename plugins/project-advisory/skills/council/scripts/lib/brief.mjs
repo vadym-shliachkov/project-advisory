@@ -14,7 +14,7 @@ const list = (items) => (items?.length ? `<ul>${items.map((x) => `<li>${rich(x)}
 // Whose session this is: the council's, the venture board's or the invention lab's.
 export const labelOf = (model) => kindLabel(model.session.kind ?? 'council');
 // What the brief calls an idea of its session.
-const unitOf = (model) => ({ venture: 'bet', lab: 'invention' })[model.session.kind] ?? 'idea';
+const unitOf = (model) => ({ venture: 'bet', lab: 'invention', studio: 'direction' })[model.session.kind] ?? 'idea';
 
 // In the brief a survivor is "idea 3", its number in the list; any other idea is named by its title.
 export function namer(model) {
@@ -23,7 +23,9 @@ export function namer(model) {
   return (text) => readerText(text, (id) => (numberOf.has(id) ? `${unit} ${numberOf.get(id)}` : model.ideas.find((i) => i.thread === id) ? `“${model.ideas.find((i) => i.thread === id).title}”` : null));
 }
 
-export const ideaTags = (idea) => `${idea.scale ? tag(idea.scale, `scale-${idea.scale}`) : ''}${idea.novelty === 'fresh' ? tag('fresh', 'fresh') : ''}${idea.invention?.newTo ? tag(`new to the ${idea.invention.newTo === 'here' ? 'thing only' : idea.invention.newTo}`, `new-${idea.invention.newTo}`) : ''}${idea.strength ? tag(`${idea.strength} support`, idea.strength) : ''}${idea.effort ? tag(`${idea.effort} effort`) : ''}`;
+// A direction of the studio is new to the web, or to its trade; an invention to the world, or to its category.
+const newWord = (idea) => (idea.direction ? { world: 'new to the web', category: 'new to its trade', here: 'its trade has it' } : { world: 'new to the world', category: 'new to the category', here: 'new to the thing only' })[idea.invention.newTo];
+export const ideaTags = (idea) => `${idea.scale ? tag(idea.scale, `scale-${idea.scale}`) : ''}${idea.novelty === 'fresh' ? tag('fresh', 'fresh') : ''}${idea.invention?.newTo ? tag(newWord(idea), `new-${idea.invention.newTo}`) : ''}${idea.strength ? tag(`${idea.strength} support`, idea.strength) : ''}${idea.effort ? tag(`${idea.effort} effort`) : ''}`;
 
 // The analysis of a killed idea, or the judge's cause of death when the writer gave none (an older session). For a
 // bet the sentence above it already says what it was, and what would make it worth trying says whether it could return.
@@ -38,7 +40,9 @@ export function killedRows(idea, analysis, plain, { bet = false } = {}) {
 }
 
 // `ideaHref` links each idea to its own page (on the session's site); without it the titles are plain text.
-export function briefSections({ model, suggestions, ideaHref = null, more = '' }) {
+// `tile` gives the picture of a direction's tile and the page it links to, when the design studio built one: a
+// direction is chosen by looking at it.
+export function briefSections({ model, suggestions, ideaHref = null, more = '', tile = () => null }) {
   const plain = namer(model);
   const noOfId = new Map(model.survivors.map((idea, i) => [idea.id, i + 1]));
   const titleOf = (idea) => (ideaHref ? `<a class="idea-link" href="${esc(ideaHref(idea))}">${esc(plain(idea.title))}</a>` : `<b>${esc(plain(idea.title))}</b>`);
@@ -59,17 +63,20 @@ ${steps.length ? `<div class="start"><h2>Where to start</h2><ol>${steps.join('')
 
   const n = model.survivors.length;
   const unit = unitOf(model);
-  const heading = { venture: 'The bets worth a first step', lab: 'The inventions that survived' }[model.session.kind] ?? 'The ideas that survived';
-  const order = model.session.kind === 'lab' ? 'remakes first, then new things built from it, then new capabilities inside it' : 'new things first, then remakes, additions and adjustments';
+  const heading = { venture: 'The bets worth a first step', lab: 'The inventions that survived', studio: 'The directions that survived' }[model.session.kind] ?? 'The ideas that survived';
+  const order = model.session.kind === 'studio' ? 'the ones that reach furthest first' : model.session.kind === 'lab' ? 'remakes first, then new things built from it, then new capabilities inside it' : 'new things first, then remakes, additions and adjustments';
+  const studio = model.session.kind === 'studio';
   const survivors = `<section class="b-part"><h2>${heading}</h2>
 ${n ? `<p class="lead">${n === 1 ? `The one ${unit}` : `All ${n} ${unit}s`} that survived the debate, none ranked above another: ${order}. Each is a test to run, not a result.</p>
 ${model.survivors.map((idea, i) => {
     const s = written.get(idea.id) ?? {};
     const fromYou = s.fromYou === undefined ? '' : s.fromYou.length ? list(s.fromYou) : '<p>Nothing beyond the go-ahead.</p>';
+    // The picture of the tile sits beside the title, small: the brief is still a few lines per direction.
+    const shown = tile(idea);
+    const top = `${head(idea, i + 1)}\n${s.sentence ? `<p class="b-lede">${rich(s.sentence)}</p>` : ''}`;
     return `<article class="b-idea" id="b-${esc(idea.id)}">
-${head(idea, i + 1)}
-${s.sentence ? `<p class="b-lede">${rich(s.sentence)}</p>` : ''}
-<dl class="decide b-facts">${row('First step', s.firstStep ? `<p>${rich(s.firstStep)}</p>` : '')}${row('Smallest prototype', s.prototype ? `<p>${rich(s.prototype)}</p>` : '')}${s.upside ? '' : row('Expect', s.expected ? `<p>${rich(s.expected)}</p>` : '')}${row('If it works', s.upside ? `<p>${rich(s.upside)}</p>` : '')}${row('Drop it if', s.killCondition ? `<p>${rich(s.killCondition)}</p>` : '')}${row('Needs from you', fromYou)}</dl>
+${shown ? `<div class="b-with-tile"><div>${top}</div><a class="b-tile" href="${esc(shown.href)}"><img src="${esc(shown.src)}" alt="${esc(`The tile of this direction: ${shown.caption}`)}"></a></div>` : top}
+<dl class="decide b-facts">${row('First step', s.firstStep ? `<p>${rich(s.firstStep)}</p>` : '')}${row(studio ? 'What to build first' : 'Smallest prototype', s.prototype ? `<p>${rich(s.prototype)}</p>` : '')}${s.upside ? '' : row('Expect', s.expected ? `<p>${rich(s.expected)}</p>` : '')}${row('If it works', s.upside ? `<p>${rich(s.upside)}</p>` : '')}${row('Drop it if', s.killCondition ? `<p>${rich(s.killCondition)}</p>` : '')}${row('Needs from you', fromYou)}</dl>
 </article>`;
   }).join('\n')}` : `<p class="lead">No ${unit} survived this session. What fell, and why, is below.</p>`}
 </section>`;
@@ -102,7 +109,7 @@ ${head(idea)}
 
   const killed = model.killed.filter((i) => !betsList.includes(i));
   const graves = killed.length ? `<section class="b-part"><h2>Killed</h2>
-<p class="lead">Every other ${unit} the ${model.session.kind === 'lab' ? 'lab' : model.session.kind === 'venture' ? 'venture board' : 'council'} looked at and turned down, with the best that could be said for it.</p>
+<p class="lead">Every other ${unit} the ${model.session.kind === 'studio' ? 'studio' : model.session.kind === 'lab' ? 'lab' : model.session.kind === 'venture' ? 'venture board' : 'council'} looked at and turned down, with the best that could be said for it.</p>
 ${killed.map((idea) => `<article class="b-idea b-other">
 ${head(idea)}
 <dl class="decide b-facts">${killedRows(idea, dead.get(idea.id), plain)}</dl>
@@ -116,15 +123,16 @@ ${head(idea)}
   return [glance, survivors, bets, open, graves, asks, more].filter(Boolean).join('\n');
 }
 
-export function buildBriefHtml({ model, suggestions }) {
+export function buildBriefHtml({ model, suggestions, tile = () => null }) {
   const more = `<section class="b-part b-more"><h2>Where the rest is</h2>
 <p class="lead">In the session folder, beside this brief:</p>
 <ul>
 ${{
     venture: '<li><b>bets.pdf</b>: each bet in full: the press release from the day it worked, what would have to be true, the first step; the frame and the provocation wall.</li>',
+    studio: '<li><b>directions.pdf</b>: each direction in full, with a picture of its tile: the idea, the design it leads to, the signature moment, why it is not a copy, what it survived; what the studio found in the field (what wins awards now, how sites of your trade work, what a template site looks like), and what it understood about the business.</li>\n<li><b>tiles/</b>: the working tile of each direction that survived. Open one in a browser: it moves.</li>\n<li><b>handoff/</b>: one file per direction for whoever builds the site, person or assistant: the idea, the values, the rules, and what not to do.</li>',
     lab: '<li><b>inventions.pdf</b>: each invention in full, with a sketch of what it could look like: how you would live it, why it is new, what it grows from, the smallest prototype, what it survived; what the lab understood about the thing, the frame and the provocation wall.</li>\n<li><b>discussion.pdf</b>: the debate, invention by invention, as the minutes of a society of inventors.</li>',
   }[model.session.kind] ?? '<li><b>suggestions.pdf</b>: the full case for each idea that survived: why it should work, how to test it, what it survived.</li>\n<li><b>discussion.pdf</b>: the debate, idea by idea.</li>'}
 <li><b>site/index.html</b>: all of it as linked pages, one page per idea, with its argument and the evidence it rests on.</li>
 </ul></section>`;
-  return page({ title: `${labelOf(model)} · Decision brief`, kind: 'decision-brief', model, body: briefSections({ model, suggestions, more }) });
+  return page({ title: `${labelOf(model)} · Decision brief`, kind: 'decision-brief', model, body: briefSections({ model, suggestions, more, tile }) });
 }

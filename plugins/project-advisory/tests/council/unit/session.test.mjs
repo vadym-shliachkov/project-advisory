@@ -87,7 +87,7 @@ test('a session gets the date as its id, the default cast, and its folder is ign
   assert.deepEqual([s.phase, s.runs, s.budget, s.closing], ['open', 0, 60, false]);
   assert.equal(s.cast.length, 9);
   assert.deepEqual(proposers(s), ['client', 'search', 'content', 'conversion', 'competitors', 'outsider']);
-  assert.equal(fs.readFileSync(path.join(root, '.project-health', '.gitignore'), 'utf8'), 'runs/\nprofile.json\nlatest.json\ncouncil/\nventure/\nlab/\ncache/\nideas.html\n');
+  assert.equal(fs.readFileSync(path.join(root, '.project-health', '.gitignore'), 'utf8'), 'runs/\nprofile.json\nlatest.json\ncouncil/\nventure/\nlab/\nstudio/\ncache/\nideas.html\n');
 });
 
 test('an existing .gitignore gains the council line once, and keeps what it had', () => {
@@ -97,7 +97,7 @@ test('an existing .gitignore gains the council line once, and keeps what it had'
   const { dir, session: s } = createSession(root, { date: '2026-11-15' });
   saveSession(dir, { ...s, phase: 'done' });
   createSession(root, { date: '2026-11-15' });
-  assert.equal(fs.readFileSync(path.join(root, '.project-health', '.gitignore'), 'utf8'), 'runs/\nprofile.json\nlatest.json\ncouncil/\nventure/\nlab/\ncache/\nideas.html\n');
+  assert.equal(fs.readFileSync(path.join(root, '.project-health', '.gitignore'), 'utf8'), 'runs/\nprofile.json\nlatest.json\ncouncil/\nventure/\nlab/\nstudio/\ncache/\nideas.html\n');
 });
 
 test('an unfinished session blocks a new one; a second session on the same day gets -2', () => {

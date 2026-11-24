@@ -28,7 +28,7 @@ export const loadGenre = (dir) => readJson(genrePath(dir), null);
 export const saveGenre = (dir, data) => writeJson(genrePath(dir), data);
 
 // The parts of an anatomy that an invention may grow from, by the letter of their ids.
-export const ANATOMY_REFS = { A: 'parts', D: 'knows', U: 'unused', J: 'journeys', W: 'weak' };
+export const ANATOMY_REFS = { A: 'parts', D: 'knows', U: 'unused', J: 'journeys', W: 'weak', M: 'material' };
 // At least one of these: an invention grows from something the thing is, knows or could do. A journey or a weak spot
 // alone says where it applies, not what it is made of.
 export const ROOT_REFS = ['A', 'D', 'U'];
@@ -54,6 +54,11 @@ export function validateAnatomy(a) {
     errors.push(...listError(a.unused, '$.anatomy.unused', 0, 15, 'things its platform or stack could do that it does not use, each { "what", "why" }'));
     (Array.isArray(a.unused) ? a.unused : []).forEach((u, i) => errors.push(...textError(u?.what, `$.anatomy.unused[${i}].what`, 10, 240), ...textError(u?.why, `$.anatomy.unused[${i}].why`, 10, 300)));
   }
+  // What the business behind the thing has that a design could be made of: the design studio's directions grow from it.
+  if (a.material !== undefined) {
+    errors.push(...listError(a.material, '$.anatomy.material', 0, 20, 'things the business has that a design could be made of (its work, product, place, people, archive, data, words), each { "what", "where" }'));
+    (Array.isArray(a.material) ? a.material : []).forEach((m, i) => errors.push(...textError(m?.what, `$.anatomy.material[${i}].what`, 10, 240), ...textError(m?.where, `$.anatomy.material[${i}].where`, 3, 300)));
+  }
   errors.push(...listError(a.journeys, '$.anatomy.journeys', 1, 8, 'journeys through it, each one or two sentences'));
   (Array.isArray(a.journeys) ? a.journeys : []).forEach((j, i) => errors.push(...textError(j, `$.anatomy.journeys[${i}]`, 20, 300)));
   for (const key of ['weak', 'rules']) {
@@ -61,8 +66,8 @@ export function validateAnatomy(a) {
     errors.push(...listError(a[key], `$.anatomy.${key}`, 0, 12, key === 'weak' ? 'weak spots and workarounds, each one sentence' : 'rules it must keep, each one sentence'));
     (Array.isArray(a[key]) ? a[key] : []).forEach((w, i) => errors.push(...textError(w, `$.anatomy.${key}[${i}]`, 10, 300)));
   }
-  if (!(a.knows?.length || a.unused?.length)) errors.push('$.anatomy: name at least one thing it knows ("knows") or one thing its platform could do that it does not use ("unused"): inventions grow from them');
-  for (const key of Object.keys(a)) if (!['kind', 'what', 'users', 'parts', 'knows', 'unused', 'journeys', 'weak', 'rules'].includes(key)) errors.push(`$.anatomy: unknown property "${key}"`);
+  if (!(a.knows?.length || a.unused?.length || a.material?.length)) errors.push('$.anatomy: name at least one thing it knows ("knows") or one thing its platform could do that it does not use ("unused"): inventions grow from them');
+  for (const key of Object.keys(a)) if (!['kind', 'what', 'users', 'parts', 'knows', 'unused', 'material', 'journeys', 'weak', 'rules'].includes(key)) errors.push(`$.anatomy: unknown property "${key}"`);
   return errors;
 }
 
@@ -75,6 +80,8 @@ export function cleanAnatomy(a) {
     parts: a.parts.map((p, i) => ({ id: `A${i + 1}`, name: one(p.name), does: one(p.does), where: one(p.where) })),
     knows: (a.knows ?? []).map((k, i) => ({ id: `D${i + 1}`, what: one(k.what), where: one(k.where) })),
     unused: (a.unused ?? []).map((u, i) => ({ id: `U${i + 1}`, what: one(u.what), why: one(u.why) })),
+    // M1… what the business has that a design could be made of (the design studio's anatomist writes it).
+    ...(a.material?.length ? { material: a.material.map((m, i) => ({ id: `M${i + 1}`, what: one(m.what), where: one(m.where) })) } : {}),
     journeys: a.journeys.map((j, i) => ({ id: `J${i + 1}`, text: one(j) })),
     weak: (a.weak ?? []).map((w, i) => ({ id: `W${i + 1}`, text: one(w) })),
     rules: (a.rules ?? []).map(one),
@@ -86,7 +93,7 @@ export function anatomyIds(anatomy) {
   const a = anatomy?.anatomy;
   if (!a) return new Map();
   return new Map([
-    ...a.parts.map((p) => [p.id, p.name]), ...a.knows.map((k) => [k.id, k.what]), ...a.unused.map((u) => [u.id, u.what]),
+    ...a.parts.map((p) => [p.id, p.name]), ...a.knows.map((k) => [k.id, k.what]), ...a.unused.map((u) => [u.id, u.what]), ...(a.material ?? []).map((m) => [m.id, m.what]),
     ...a.journeys.map((j) => [j.id, j.text]), ...a.weak.map((w) => [w.id, w.text]),
   ]);
 }
@@ -101,6 +108,7 @@ export function anatomyView(anatomy) {
     parts: a.parts.map((p) => `${p.id} ${p.name}: ${p.does}`),
     knows: a.knows.map((k) => `${k.id} ${k.what}`),
     unused: a.unused.map((u) => `${u.id} ${u.what}`),
+    ...(a.material?.length ? { material: a.material.map((m) => `${m.id} ${m.what}`) } : {}),
     journeys: a.journeys.map((j) => `${j.id} ${j.text}`),
     weak: a.weak.map((w) => `${w.id} ${w.text}`),
     rules: a.rules,

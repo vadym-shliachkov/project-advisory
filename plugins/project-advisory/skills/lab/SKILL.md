@@ -63,6 +63,17 @@ At the end:
 
 Do not summarise the inventions, rank them or say which you like. The verdicts are the judge's and the documents are the writers'. Do not send the documents to anyone.
 
+## What the person says that outlives the session
+
+When the person turns something down, or asks for more of it, what they say is saved so that no later session, of this skill or of its siblings, brings the same thing back under another name.
+
+- **The rule behind a reason.** A rejected idea is kept in the ledger with its reason, which stops that one idea. When the reason reaches past it ("we never discount", "nothing that needs a login"), it is a rule: save it in their words with `LN note --root "<ROOT>" --type forbidden --title "<the rule in a few words>" --value "<what they said, with their reason>" [--idea I12] [--scope <where it applies>]`. `--type` is `forbidden` (must not be proposed or done), `constraint` (a limit every proposal stays inside) or `decision` (settled, not asked again).
+- **When you cannot tell** whether a reason is a rule or only about that one idea, ask once: "Is that a rule for every future proposal, or only for this one?" A "not now" or "not this one" stays on the idea and is no note.
+- **A strong yes.** "More of this" is saved the same way with `--type preference`: later sessions lean towards it; it is not a rule.
+- **Only the person lifts a rule.** `LN note --root "<ROOT>" --show` lists the notes; `LN note --root "<ROOT>" --retire K3` removes one, when they say so.
+
+Save their words, not your reading of them, and never save a note the person did not give. Every member reads the notes: nothing a rule forbids is proposed, and the docket refuses what slipped through.
+
 ## Rules
 
 - You are not a member of the lab. No inventions, no arguments, no rulings, no "I would add". You do not write or edit the documents or the sketches. Showing the person what the lab understood (`study --show`) and the framings (`frame --show`), as the commands give them, is part of your job; nothing else the members wrote is.

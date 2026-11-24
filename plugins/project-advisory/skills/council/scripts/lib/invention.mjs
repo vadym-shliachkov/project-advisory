@@ -56,19 +56,33 @@ function textError(value, at, min, max) {
   return [];
 }
 
-export function inventionErrors(s, at, { session, frame, anatomy, pass, role }) {
-  const errors = betErrors(s, at, { session, frame, pass, role, scales: LAB_SCALES });
-  if (!LAB_SCALES.includes(s.scale)) errors.push(`${at}.scale: feature (a new capability inside the thing), product (a new thing built from it, beside it) or remake (a new way the thing works); the lab invents, it does not tidy`);
-  if (!Array.isArray(s.experience) || s.experience.length < 3 || s.experience.length > 6) errors.push(`${at}.experience: three to six steps, how a person who uses the thing would live the invention, each one sentence ("You open…", "It shows…")`);
+// `words` lets the design studio check its directions by the same rules in its own terms: its scales, the part of the
+// anatomy a direction must grow from, and what it calls new (see direction.mjs).
+const LAB_WORDS = {
+  scales: LAB_SCALES, roots: ROOT_REFS, unit: 'invention',
+  scaleText: 'feature (a new capability inside the thing), product (a new thing built from it, beside it) or remake (a new way the thing works); the lab invents, it does not tidy',
+  growsFrom: 'at least one a part (A…), something the thing knows (D…) or something its platform could do and does not (U…)',
+  rootText: 'name at least one part (A…), one thing it knows (D…) or one thing its platform could do (U…): an invention that grows from none of them belongs to any thing, not to this one',
+  newText: {
+    claim: 'world (nothing like it was found anywhere) or category (it exists in other fields, not in things of this kind). An invention that things of this kind already have is not one: see the standard kit of the genre',
+    found: 'it is not new to the world; say "category" when what you found is in another field',
+  },
+};
+
+export function inventionErrors(s, at, { session, frame, anatomy, pass, role }, words = {}) {
+  const w = { ...LAB_WORDS, ...words };
+  const errors = betErrors(s, at, { session, frame, pass, role, scales: w.scales });
+  if (!w.scales.includes(s.scale)) errors.push(`${at}.scale: ${w.scaleText}`);
+  if (!Array.isArray(s.experience) || s.experience.length < 3 || s.experience.length > 6) errors.push(`${at}.experience: three to six steps, how a person who uses the thing would live the ${w.unit}, each one sentence ("You open…", "It shows…")`);
   else s.experience.forEach((step, i) => errors.push(...textError(step, `${at}.experience[${i}]`, 10, 240)));
   const known = anatomyIds(anatomy);
-  if (!Array.isArray(s.buildsOn) || !s.buildsOn.length || s.buildsOn.length > 6) errors.push(`${at}.buildsOn: one to six ids of the anatomy this invention grows from, at least one a part (A…), something the thing knows (D…) or something its platform could do and does not (U…)`);
+  if (!Array.isArray(s.buildsOn) || !s.buildsOn.length || s.buildsOn.length > 6) errors.push(`${at}.buildsOn: one to six ids of the anatomy this ${w.unit} grows from, ${w.growsFrom}`);
   else {
     for (const id of s.buildsOn) if (!known.has(id)) errors.push(`${at}.buildsOn: ${id} is not in the anatomy; its ids are ${[...known.keys()].join(', ') || 'none (the anatomy has not been written)'}`);
-    if (known.size && !s.buildsOn.some((id) => ROOT_REFS.includes(String(id)[0]))) errors.push(`${at}.buildsOn: name at least one part (A…), one thing it knows (D…) or one thing its platform could do (U…): an invention that grows from none of them belongs to any thing, not to this one`);
+    if (known.size && !s.buildsOn.some((id) => w.roots.includes(String(id)[0]))) errors.push(`${at}.buildsOn: ${w.rootText}`);
   }
-  if (!CLAIMS.includes(s.newTo)) errors.push(`${at}.newTo: world (nothing like it was found anywhere) or category (it exists in other fields, not in things of this kind). An invention that things of this kind already have is not one: see the standard kit of the genre`);
-  else if (s.newTo === 'world' && ['yes', 'partly'].includes(s.priorArt?.exists)) errors.push(`${at}.newTo: your own search found something like it (priorArt.exists is "${s.priorArt.exists}"), so it is not new to the world; say "category" when what you found is in another field`);
+  if (!CLAIMS.includes(s.newTo)) errors.push(`${at}.newTo: ${w.newText.claim}`);
+  else if (s.newTo === 'world' && ['yes', 'partly'].includes(s.priorArt?.exists)) errors.push(`${at}.newTo: your own search found something like it (priorArt.exists is "${s.priorArt.exists}"), so ${w.newText.found}`);
   return errors;
 }
 

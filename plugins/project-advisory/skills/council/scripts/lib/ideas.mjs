@@ -236,6 +236,6 @@ export function ideaLine(i) {
     inconclusive: `inconclusive: ${i.result?.found}`,
   }[i.status] ?? i.status;
   const lab = i.ventureCandidate ? ' (reached further than the council could test: worth taking to the venture board)' : '';
-  const origin = i.origin === 'lab' ? ' {from the invention lab}' : i.origin === 'venture' ? ' {from the venture board}' : '';
+  const origin = i.origin === 'lab' ? ' {from the invention lab}' : i.origin === 'venture' ? ' {from the venture board}' : i.origin === 'studio' ? ' {from the design studio}' : '';
   return `${i.id} "${i.title}" [${i.proposedBy}]${origin} — ${fate}${lab}`.replace(/\s+/g, ' ');
 }

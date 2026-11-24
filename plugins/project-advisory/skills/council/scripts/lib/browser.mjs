@@ -44,6 +44,23 @@ export function dumpDom(browser, htmlPath, { timeoutMs = 60000 } = {}) {
   }
 }
 
+// The markup of a public page after its scripts ran, for reading what it is built with (see detectTech). The page is
+// only opened and read: nothing is sent to it.
+export function dumpUrl(browser, url, { timeoutMs = 60000 } = {}) {
+  const profileDir = fs.mkdtempSync(path.join(os.tmpdir(), 'council-chrome-'));
+  try {
+    const r = spawnSync(browser, [
+      '--headless=new', '--disable-gpu', '--no-first-run', '--no-default-browser-check',
+      `--user-data-dir=${profileDir}`, '--dump-dom', '--virtual-time-budget=8000', url,
+    ], { timeout: timeoutMs, stdio: 'pipe', maxBuffer: 64 * 1024 * 1024 });
+    const html = String(r.stdout ?? '');
+    if (!html.trim()) throw new Error(`The browser read nothing from ${url} (exit ${r.status ?? 'timeout'}). ${String(r.stderr ?? '').slice(0, 300)}`);
+    return html;
+  } finally {
+    try { fs.rmSync(profileDir, { recursive: true, force: true }); } catch { /* browser may still hold files on Windows */ }
+  }
+}
+
 export function printPdf(browser, htmlPath, pdfPath, { timeoutMs = 120000 } = {}) {
   const profileDir = fs.mkdtempSync(path.join(os.tmpdir(), 'council-chrome-'));
   try {

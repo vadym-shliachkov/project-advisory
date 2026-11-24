@@ -28,7 +28,7 @@ export const inventionTags = (idea) => `${ideaTags(idea)}${idea.invention?.feasi
 // What of the thing an invention grows from, by the names the anatomy gives.
 export function grownFrom(idea, anatomy) {
   const a = anatomy?.anatomy;
-  const by = new Map([...(a?.parts ?? []).map((p) => [p.id, `${p.name}: ${p.does}`]), ...(a?.knows ?? []).map((k) => [k.id, `What it knows: ${k.what}`]), ...(a?.unused ?? []).map((u) => [u.id, `What it could do and does not: ${u.what}`]), ...(a?.journeys ?? []).map((j) => [j.id, `The journey: ${j.text}`]), ...(a?.weak ?? []).map((w) => [w.id, `A weak spot: ${w.text}`])]);
+  const by = new Map([...(a?.parts ?? []).map((p) => [p.id, `${p.name}: ${p.does}`]), ...(a?.knows ?? []).map((k) => [k.id, `What it knows: ${k.what}`]), ...(a?.unused ?? []).map((u) => [u.id, `What it could do and does not: ${u.what}`]), ...(a?.material ?? []).map((m) => [m.id, `What the business has: ${m.what}`]), ...(a?.journeys ?? []).map((j) => [j.id, `The journey: ${j.text}`]), ...(a?.weak ?? []).map((w) => [w.id, `A weak spot: ${w.text}`])]);
   return (idea.invention?.buildsOn ?? []).map((id) => by.get(id)).filter(Boolean);
 }
 
@@ -90,17 +90,18 @@ ${anatomy.corrections?.length ? `<h4>What you corrected</h4>${list(anatomy.corre
 </section>`;
 }
 
-export function frameSection(frame, model, plain) {
+// `words` lets the design studio print the same frame in its own terms.
+export function frameSection(frame, model, plain, words = { who: 'lab', did: 'invented', about: 'the thing' }) {
   const f = frame?.frame;
   if (!f) return '';
   const picked = new Set(frame?.picked ?? []);
   const box = f.morphology?.length ? table('morphology', ['What it is made of', 'The options (what it has today in bold)'], f.morphology.map((d) => `<tr><td><b>${esc(d.name)}</b></td><td>${d.options.map((o, i) => (i === d.now ? `<b>${esc(o)}</b>` : esc(o))).join(' · ')}</td></tr>`)) : '';
   const harvested = (id) => model.ideas.filter((i) => i.bet?.provocation === id);
   const wall = frame?.provocations?.length ? `<h4>The provocation wall</h4>
-<p class="meta">Deliberately absurd statements about the thing, written to be mined for what is workable in them, and what was harvested from each.</p>
+<p class="meta">Deliberately absurd statements about ${esc(words.about)}, written to be mined for what is workable in them, and what was harvested from each.</p>
 <table class="wall"><thead><tr><th scope="col">Provocation</th><th scope="col">Harvested</th></tr></thead><tbody>${frame.provocations.map((p) => `<tr><td>${rich(p.text)}<span class="sub">${esc(p.kind)}</span></td><td>${harvested(p.id).map((i) => `${esc(plain(i.title))} ${stamp(i.verdict)}`).join('<br>') || '<span class="meta">Nothing harvested.</span>'}</td></tr>`).join('')}</tbody></table>` : '';
   return `<section class="set" id="frame"><h2>The frame</h2>
-<p class="lead">What the lab worked from, before anyone invented.${frame?.picked?.length ? ' The framings you picked are marked.' : ''}</p>
+<p class="lead">What the ${esc(words.who)} worked from, before anyone ${esc(words.did)}.${frame?.picked?.length ? ' The framings you picked are marked.' : ''}</p>
 <h4>The ideal result</h4><p>${rich(f.ideal)}</p>
 ${f.evolution ? `<h4>Where it stands on its line of evolution, and the next step</h4><p><b>Now:</b> ${rich(f.evolution.now)}</p><p><b>Next:</b> ${rich(f.evolution.next)}</p>` : ''}
 <h4>Contradictions</h4><ul>${f.contradictions.map((c) => `<li>${picked.has(c.id) ? '<b>Picked.</b> ' : ''}${rich(c.want)}, but then ${rich(c.butThen)}. <span class="meta">The way round: ${rich(c.separate)}</span></li>`).join('')}</ul>

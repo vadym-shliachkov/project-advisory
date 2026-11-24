@@ -16,6 +16,7 @@ Every invention ends in one of three places:
    - it is **not a thing to use**: marketing, pricing, a new audience or a business model (it belongs to the venture board), or a tidy-up of what is there (it belongs to the council);
    - it **grows from nothing of this thing**: it would fit any product as well;
    - a rule of the thing forbids it (`ref`: the rule, or the person's words);
+   - the person turned it down before: it is the same thing under another name, or a variant that meets the objection they gave (what they turned down, and the rule behind it, is in what is known about the project; `ref`: the ledger id or the rule's id);
    - the ledger shows the same idea killed, rejected or failed and nothing has changed (`ref`: the ledger id).
 
 Never refuse an invention for being large, absurd at first sight or unproven. When in doubt about novelty, admit it: the examiner searches for prior art in the debate, and the verdict rules on how new it is. When in doubt about anything else, admit.

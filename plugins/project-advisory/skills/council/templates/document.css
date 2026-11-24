@@ -387,3 +387,44 @@ table.morphology td:first-child { width: 32%; }
 .bets-doc .field p, .inventions-doc .field p { orphans: 3; widows: 3; }
 dl.survived dt { break-after: avoid; }
 dl.survived dd { break-inside: avoid; }
+
+/* ---- The design studio: directions, their tiles, what the studio found in the field ---- */
+.tag-scale-reinvention { background: var(--accent); color: #ffffff; }
+.tag-scale-redesign { background: none; color: var(--accent); border: 0.75pt solid var(--accent); }
+.tag-scale-refresh { background: none; color: var(--ink); border: 0.75pt solid var(--line); }
+.tag-made-material, .tag-made-idea, .tag-made-far-field { background: var(--good-soft); color: var(--good); }
+.tag-made-assembly { background: var(--check-soft); color: var(--check); }
+.tag-swap-own { background: var(--good-soft); color: var(--good); font-weight: 600; }
+.tag-swap-sector, .tag-swap-anyone { background: var(--bad-soft); color: var(--bad); }
+.tag-share-everywhere { background: var(--bad-soft); color: var(--bad); }
+.tag-share-common { background: var(--warn-soft); color: var(--warn); }
+.tag-share-rising { background: var(--check-soft); color: var(--check); }
+.tag-share-rare { background: var(--good-soft); color: var(--good); }
+/* A tile is shown as it looks on a desktop and, beside it, on a narrow screen; the picture links to the working page. */
+.tile { margin: var(--sp-3) 0 var(--sp-4); max-width: 170mm; break-inside: avoid; }
+.tile-shots { display: grid; grid-template-columns: 1fr 22%; gap: var(--sp-3); align-items: start; }
+.tile-shot { display: block; }
+.tile-shot img { display: block; width: 100%; height: auto; max-height: 84mm; object-fit: cover; object-position: top; border: 1px solid var(--line); border-radius: 3pt; }
+/* The tile stands right under the direction's title, so a direction is seen before it is read about. */
+.direction .tile { break-before: avoid; }
+.b-with-tile { display: flex; gap: var(--sp-4); align-items: flex-start; justify-content: space-between; max-width: 178mm; break-inside: avoid; break-after: avoid; }
+.b-with-tile > div { flex: 1; min-width: 0; }
+.b-tile { flex: none; display: block; width: 50mm; margin: 0 0 var(--sp-2); }
+.b-tile img { display: block; width: 100%; height: auto; border: 1px solid var(--line); border-radius: 3pt; }
+.tile figcaption { margin-top: var(--sp-1); font-size: var(--t-sm); color: var(--ink); max-width: var(--prose); }
+.tile figcaption .meta { display: block; font-size: var(--t-xs); margin-top: 2pt; }
+.stranger .decide { background: var(--surface); border-left-color: var(--line); }
+ul.swatches { list-style: none; padding: 0; margin: 0 0 var(--sp-3); display: grid; grid-template-columns: repeat(auto-fill, minmax(52mm, 1fr)); gap: var(--sp-2) var(--sp-4); }
+ul.swatches li { font-size: var(--t-sm); line-height: 1.4; break-inside: avoid; }
+ul.swatches code, table.tokens code { font-family: ui-monospace, "SFMono-Regular", Consolas, "Liberation Mono", monospace; font-size: 8.5pt; color: var(--muted); }
+.swatch { display: inline-block; width: 11pt; height: 11pt; margin-right: 5pt; border-radius: 2pt; border: 1px solid var(--line); vertical-align: -2pt; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+table.design td:first-child { width: 24mm; }
+table.tokens td:first-child { width: 28mm; }
+.field table.tokens { margin-bottom: var(--sp-4); }
+.field table.tokens + h5 { margin-top: var(--sp-3); }
+/* Short words in narrow columns are never broken in the middle. */
+table.patterns td:nth-child(2), table.slop td:nth-child(2) { width: 28mm; white-space: nowrap; overflow-wrap: normal; }
+table.patterns td:last-child { width: 28mm; white-space: nowrap; }
+table.built td:last-child { width: 16mm; }
+table.sample td:first-child { width: 30%; overflow-wrap: anywhere; }
+.directions-doc .field-found h4, .directions-doc .anatomy h4 { margin-top: var(--sp-4); }

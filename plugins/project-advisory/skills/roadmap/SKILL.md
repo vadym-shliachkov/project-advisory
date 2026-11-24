@@ -34,6 +34,7 @@ All of it lives in `<ROOT>/.project-health/`:
     - `convention`: how things are done here;
     - `constraint`: fixed limits, such as hosting, tools or legal requirements;
     - `decision`: a direction agreed in the discussion.
+    A note may already be there with `"by"` (the council, the venture board, the invention lab or the design studio saved it, in the person's words, when they turned something down or asked for more of it), with `"ideaIds"` and with the kind `preference` (something they liked). Leave those fields as they are, and respect the note like any other.
     `source` is `person` when they said it, and `project` when you read it in the project and they confirmed it.
   - Save with `PH knowledge-save --root "<ROOT>"` (the folder the health check ran on; it refuses one with no health-check run): `{ "people": [...], "notes": [...], "remove": ["K3"] }`. Only send what changed: people replace the entry with the same name, and notes replace the entry with the same id.
 - **The roadmap** (`runs/<run>/roadmap.json`) holds:
