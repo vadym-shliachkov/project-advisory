@@ -1,0 +1,47 @@
+{
+  "about": "The seats that propose concepts. Each starts from a different place, so the concepts differ in what they are made of, not only in how they are coloured. None of them is shown the honoured or rival sites; the critic and the builder are.",
+  "seats": [
+    {
+      "role": "idea",
+      "title": "The one idea",
+      "name": "the seat of the one idea",
+      "start": "One idea about what this business is or does, said so a child would understand it, from which everything a visitor sees and feels follows. Find the metaphor the business lives inside without knowing it.",
+      "model": "standard"
+    },
+    {
+      "role": "material",
+      "title": "The material",
+      "name": "the seat of the material",
+      "start": "What this business has that no other has (its work, its process, how its people work, its places, its archive, its numbers) turned into a visual world a visitor steps into. The design is made of the business, not decorated with it.",
+      "model": "standard"
+    },
+    {
+      "role": "feeling",
+      "title": "The feeling",
+      "name": "the seat of the feeling",
+      "start": "Start from the emotion. What should the people who come feel in the first ten seconds (trust, relief, awe, curiosity, calm, being understood), and why is that the right feeling for this business? Then find the images, light and movement that cause that feeling. Use what customers say.",
+      "model": "standard"
+    },
+    {
+      "role": "far",
+      "title": "Far fields",
+      "name": "the seat of far fields",
+      "start": "How film, architecture, exhibitions, the stage, maps, games, music, scientific drawing or packaging would express this business. Take one of them seriously and carry it over to a screen whole: its space, its light, its pace.",
+      "model": "standard"
+    },
+    {
+      "role": "motion",
+      "title": "Motion",
+      "name": "the seat of motion",
+      "start": "Movement is the idea. Choreograph first, lay out second: what moves, how it moves (its weight, its speed, its rhythm), what the visitor's own movement does to it, and why that movement means this business and makes people feel something.",
+      "model": "standard"
+    },
+    {
+      "role": "provocateur",
+      "title": "Provocation",
+      "name": "the provocateur",
+      "start": "The site nobody who makes sites for this trade would dare to make. Write the outrageous version first, then the workable form of it that keeps its nerve. Safe is the one thing you may not be.",
+      "model": "strongest"
+    }
+  ]
+}

@@ -9,7 +9,7 @@ A Claude Code and Codex plugin with six skills for a web project, all under one 
 | `/project-advisory:council` | Weekly council of role agents that proposes ideas for growth and tries to kill them. |
 | `/project-advisory:venture` | Venture board, monthly or quarterly, that looks for what the business could start, sell, build or become. |
 | `/project-advisory:lab` | Invention lab that studies the site, app or tool itself and invents new things it could do, that nothing of its kind has. |
-| `/project-advisory:studio` | Design studio that finds what a site could look, read and move like, made of what the business has, and builds a working tile of each direction that survives. |
+| `/project-advisory:studio` | Design studio that comes back with one new design concept for a site (the idea behind it, its visual world and its motion) and one working page that shows it. |
 
 No skill ever submits a form or contacts a real company or person. Every agent is told so, and on Claude Code a hook enforces it (see [No-contact guard](#no-contact-guard)).
 
@@ -162,20 +162,19 @@ Each session ends with a decision brief, the inventions (each with a sketch of w
 ## Design studio
 
 ```text
-/project-advisory:studio [path] [--url <https://…>] [--focus "<part>"] [--goal "<text>"] [--data <folder>] [--budget <n>]
+/project-advisory:studio [path] [--url <https://…>] [--focus "<part>"] [--goal "<text>"] [--reuse latest|<session>|none]
 ```
 
-Finds what a site could look, read and move like, for a site that exists or one not built yet. It is made to avoid three things: a copy (a site that exists, or one effect lifted from one), a collection (effects seen here and there with nothing holding them together) and slop (the look of a template or of a machine's defaults).
+Comes back with **one new design concept** for a site, existing or not built yet, and **one working page that shows it**. A concept is the idea behind the site, the visual world that carries it and the motion that gives it feeling. Corrections such as larger type or more white space are not design, and the studio refuses them as concepts.
 
-It starts by studying. An anatomist reads the project, the live pages and what the person says about the business, and names **what the business has that a design could be made of**: its work, its product, its place, its people, its archive, its numbers, its words. A sector scout lists how sites of the trade work and the most distinctive of them. An awards scout looks at what wins awards now: for each honoured site its one idea, how it moves, its signature moment and what it is built with, which the `probe` command reads from the page's markup (libraries, frameworks, fonts, canvases, whether it answers a visitor who asked for less motion); then the patterns the sites share, each written as what it does for the visitor and marked with how common it has become. A slop scout lists what template and machine-made sites look like now. A voice scout gathers what customers say, and a craft scan finds what the web can now do for type and motion. The person sees what the studio understood and corrects it before anyone designs.
+1. **Study.** A business scout writes what the business is as raw material for a designer: its world, what it has that no other has, what visitors must feel. A field scout looks at what wins awards now, how sites of the trade look and what a template looks like, with pictures. A study an earlier session left in the last 30 days is reused.
+2. **Concepts.** Six seats each propose two concepts, starting from different places: one idea, the business's own material, the feeling, fields far from the web, motion, provocation. They are not shown other sites, so nothing can be copied. A concept that is a rule about type size or weight, or whose motion is "nothing moves", is refused by the script.
+3. **Critique.** A critic who has seen the field and the visitor's voice comment once on every concept: copy, template, collection of effects, type-only, does it make people feel something.
+4. **Pick.** A judge picks one concept and works it out: the story as a visitor moves down the page, palette, type, forms, imagery, a choreography of three to seven movements with durations and easing, the signature moment, the inner pages, the voice. Every other concept gets a line on why it was not chosen.
+5. **Build.** A builder makes one page that opens as the new site's first screen, live and moving, then shows the idea, the story, the world, each movement (replayable), inner pages on desktop and phone, and the site before and after. It may load fonts and GSAP, Three.js or similar from the usual CDNs, and the business's own pictures from the project; nothing else leaves the page.
+6. **Look.** A stranger who was told nothing looks at pictures of the page and says what business it seems for and what it makes them feel; the builder revises once when asked.
 
-A framer sets the problem and a provocateur writes absurd statements. Seven seats then propose whole directions from cards dealt to them, each starting from a different place: the visitor, the business's own material, one idea about the business, fields far from the web (print, film, exhibitions, buildings, books), type and movement, the provocations, and one seat only from the known patterns of the web. **The designers are not shown the other sites**: they are handed the patterns with no site named, and the evidence of the scouts with its addresses withheld, so nothing can be copied; only the examiner and the judge see the sites. A direction is one idea and the type, colour, layout, imagery, motion and technology that follow from it. It says whether the site needs a signature moment at all, of what kind (craft, the business's own material, a story, something to play with, a spectacle, speed, wit, or none), why, and what it is like on the tenth visit. It says what it is made from; a direction made by joining known patterns is allowed, must say what the whole is that none of its parts is, and a seat may send only one.
-
-Another seat takes every direction further, the judge turns away what sites of the trade already look like and what is made of the tells of a template, and an examiner and the other seats attack each direction over up to three rounds: is it a copy, an assembly of effects, generic (the swap test: would it look right with a rival's name on it), a template; does the signature moment serve the visitor; would visitors find what they came for; can it be built, can the business feed it, can everyone use it. A judge who took no part rules on each: whether it survived, the swap test, how new it is, what it is made from, what becomes of its signature moment, how feasible it is. Nothing is ranked: a site takes one direction, and choosing it is the owner's.
-
-Every direction that survives is built as a **tile**: one small working page with the real type, colours and movement, showing the first screen and the signature moment. A tile is one file that may load fonts and nothing else; the script adds a rule under which the browser refuses every other request. A stranger who was told nothing then looks at pictures of the tiles and says what business each seems to be for, whether it would fit a rival, what it brings to mind and which tells of a template it shows; a tile the stranger could not place goes back to the prototyper once.
-
-Each session ends with a decision brief, the directions (each with a picture of its tile, what the stranger saw, the design, the values of the tile, and what the studio found in the field), the tiles to open in a browser, a **handoff file** per direction for whoever builds the site (the idea, the values, the rules of the direction, what the business must supply and what not to do), and the session's pages.
+The session ends with `page/index.html`, its pictures, and `concept.md`, a one-page note for whoever builds the site.
 
 ## What the person says
 
@@ -195,7 +194,7 @@ The plugin ships a `PreToolUse` hook (`hooks/hooks.json`, `hooks/no-contact.mjs`
 
 Reading is never refused: opening and fetching pages, searching, pictures of pages, reading files, read-only `git` and `gh`, and the plugin's own scripts, whatever their input quotes.
 
-It applies always inside the plugin's own subagents (`member`, `area-analyst`, `writer`, which have no browser tools at all), and in the main session while a skill runs: every command of the skills' scripts arms it for two hours, and closing a council, venture, lab or studio session lifts it. It is armed for the user, so every Claude Code window is guarded meanwhile. To lift it at once, run in your own terminal:
+It applies always inside the plugin's own subagents (`member`, `area-analyst`, `writer`, `designer`, none of which has browser tools), and in the main session while a skill runs: every command of the skills' scripts arms it for two hours, and closing a council, venture, lab or studio session lifts it. It is armed for the user, so every Claude Code window is guarded meanwhile. To lift it at once, run in your own terminal:
 
 ```bash
 node "<plugin folder>/hooks/guard.mjs" off      # or: status

@@ -314,7 +314,7 @@ export function toolReason(name, input = {}) {
 }
 
 // The plugin's own subagents are guarded always; a plugin agent arrives as "project-advisory:<name>".
-export const OUR_AGENTS = ['member', 'area-analyst', 'writer'];
+export const OUR_AGENTS = ['member', 'area-analyst', 'writer', 'designer'];
 export const isOurAgent = (type) => {
   const t = String(type ?? '');
   return t.startsWith('project-advisory:') || OUR_AGENTS.includes(t);
