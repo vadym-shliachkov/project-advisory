@@ -2,11 +2,12 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
-import { tmpDir, readJson } from '../helpers.mjs';
+import { tmpDir, readJson, PLUGIN_ROOT } from '../helpers.mjs';
 import { putFact, loadFacts, staleMetrics, loadKnowledge, latestHealthRun, latestRoadmap, holdsSecret, factsPath } from '../../../skills/council/scripts/lib/bank.mjs';
 import { ignoreSessions } from '../../../skills/council/scripts/lib/paths.mjs';
 import { digest } from '../../../skills/council/scripts/lib/digest.mjs';
-import { fact, ideas as ideaSave, COMMANDS } from '../../../skills/council/scripts/commands.mjs';
+import { fact, note, ideas as ideaSave, COMMANDS } from '../../../skills/council/scripts/commands.mjs';
+import { validateKnowledge } from '../../../skills/project-health/scripts/lib/knowledge.mjs';
 
 const stdin = (data) => ({ stdin: () => JSON.stringify(data) });
 const kb = (root, ...parts) => path.join(root, '.project-health', 'kb', ...parts);
@@ -199,4 +200,43 @@ test('sessions are ignored by git; the shared .gitignore keeps what it had', () 
 test('the bank refuses the usual shapes of secrets', () => {
   for (const text of ['The key is AKIAIOSFODNN7EXAMPLE', '-----BEGIN RSA PRIVATE KEY-----', 'token ghp_abcdefghijklmnopqrstuvwxyz0123456789', 'api_key = "abcd1234efgh5678"', 'password: hunter2hunter2']) assert.ok(holdsSecret(text), text);
   for (const text of ['The password is kept in the team vault', 'Enquiries rose from 12 to 19', 'Publish the API reference', '']) assert.ok(!holdsSecret(text), text);
+});
+
+// ---- What the person said that outlives a session ----
+
+test('what the person says when they turn something down is kept as a rule, read by every skill, and only they retire it', () => {
+  const root = tmpDir();
+  const errorOf = (r) => (r.errors ?? []).join('\n');
+  assert.throws(() => note({ root }), /Usage: note --type forbidden\|constraint\|decision\|preference/);
+  assert.match(errorOf(note({ root, type: 'ban', title: 'No', value: 'short' })), /--type: what kind of note[\s\S]*--title: the rule in a few words[\s\S]*--value: what the person said/);
+  assert.match(errorOf(note({ root, type: 'forbidden', title: 'No passwords shown', value: 'The password is password=hunter2hunter2, never show it' })), /must not hold a secret/);
+  // A session of the council ended; the person turns a survivor down, and says why.
+  write(kb(root, 'ideas.json'), { ideas: [{ id: 'I1', title: 'A dark home page lit like a kiln at night', proposedBy: 'outsider', status: 'survived', hypothesis: { change: 'The home page is dark, lit like a kiln at night', effect: 'A visitor remembers the fire', because: 'No pottery of the trade shows the fire at all', killCondition: 'Customers say they cannot read the prices' }, verdict: { strength: 'speculative', vsDoNothing: 'It would stand out from every pottery' }, history: [{ date: '2026-11-20', event: 'proposed', by: 'council', session: '2026-11-20' }] }] });
+  write(kb(root, 'knowledge.json'), { people: [{ name: 'Sam', role: 'Owner', availability: 'An hour a week' }], notes: [{ id: 'K1', kind: 'feature', title: 'The shop stays', detail: 'The shop page must keep working as it does.', source: 'person' }], updatedAt: '2026-11-01' });
+  write(kb(root, 'knowledge.md'), '# old');
+  assert.equal(ideaSave({ root, by: 'person' }, stdin({ ideas: [{ id: 'I1', status: 'rejected', decision: { reason: 'Too dark for our customers' } }] })).ok, true);
+  const saved = note({ root, type: 'forbidden', title: 'No dark backgrounds', value: 'Never a dark background: our customers are over sixty and read us in daylight.', idea: 'I1', scope: 'design' });
+  assert.deepEqual([saved.ok, saved.id, saved.kind], [true, 'K2', 'forbidden'], errorOf(saved));
+  assert.equal(note({ root, type: 'forbidden', title: 'no dark backgrounds', value: 'Said again in other words, the same rule as before.' }).already, 'This note was saved before.');
+  assert.equal(note({ root, kind: 'lab', type: 'preference', title: 'The hand-written price tags', value: 'More of the hand-written price tags: people photograph them.' }).id, 'K3');
+  const file = readJson(kb(root, 'knowledge.json'));
+  assert.deepEqual(file.notes[1], { id: 'K2', kind: 'forbidden', title: 'No dark backgrounds', detail: 'Never a dark background: our customers are over sixty and read us in daylight.', scope: 'design', source: 'person', by: 'council', ideaIds: ['I1'], addedAt: file.notes[1].addedAt, updatedAt: file.notes[1].updatedAt });
+  assert.equal(file.notes[2].by, 'lab');
+  assert.deepEqual([file.people.length, file.notes[0].id], [1, 'K1'], 'what others wrote is left as it is');
+  assert.deepEqual(validateKnowledge(file), [], 'the roadmap skill can still read and save the file');
+  assert.match(fs.readFileSync(kb(root, 'knowledge.md'), 'utf8'), /## Not allowed\n\n- \*\*No dark backgrounds\*\* _\(design\)_[\s\S]*## Liked\n\n- \*\*The hand-written price tags\*\*/);
+  // Every member of every skill reads it in the digest, with the instruction that a variant is the same idea.
+  const text = digest(root);
+  for (const part of ['## What the person turned down, and what they asked for more of', 'The same thing under another name, or a variant that meets the same objection, is not proposed again', '- Turned down: I1 "A dark home page lit like a kiln at night" — Too dark for our customers', '- The rule behind it: **No dark backgrounds** [design] — Never a dark background', '(K2, said of I1)', 'The person asked for more of these', '- Liked: **The hand-written price tags**', '- Not allowed: **No dark backgrounds** [design]']) assert.ok(text.includes(part), part);
+  assert.deepEqual(note({ root, show: true }).notes.map((n) => [n.id, n.kind]), [['K1', 'feature'], ['K2', 'forbidden'], ['K3', 'preference']]);
+  assert.match(errorOf(note({ root, retire: 'K9' })), /There is no note K9/);
+  assert.equal(note({ root, retire: 'K2' }).retired.title, 'No dark backgrounds');
+  assert.ok(!digest(root).includes('The rule behind it'));
+  for (const skill of ['council', 'venture', 'lab']) {
+    const text = fs.readFileSync(path.join(PLUGIN_ROOT, 'skills', skill, 'SKILL.md'), 'utf8');
+    assert.match(text, /## What the person says that outlives the session/, skill);
+    assert.match(text, /note --root "<ROOT>" --type forbidden/, skill);
+    assert.match(text, /Is that a rule for every future proposal, or only for this one\?/, skill);
+    assert.match(fs.readFileSync(path.join(PLUGIN_ROOT, 'skills', skill, 'agents', 'docket.md'), 'utf8'), /under another name/, skill);
+  }
 });

@@ -1,10 +1,9 @@
 import path from 'node:path';
 import { readJson, writeJson } from './io.mjs';
-import { maxRounds, isLab, isStudio, isVenture, isFramed, debateAllowance, proposers, seat, takeTurn, turnTaken } from './session.mjs';
+import { maxRounds, isLab, isVenture, isFramed, debateAllowance, proposers, seat, takeTurn, turnTaken } from './session.mjs';
 import { applyIdeas } from './ideas.mjs';
 import { loadFrame, betErrors, cleanBet, assignAmplifiers, deal } from './frame.mjs';
 import { inventionErrors, cleanInvention, LAB_SCALES, LAB_ATTACK_KINDS } from './invention.mjs';
-import { directionErrors, cleanDirection, STUDIO_ATTACK_KINDS } from './direction.mjs';
 import { loadAnatomy } from './anatomy.mjs';
 import { kindOf } from './paths.mjs';
 import { survivors, finalise } from './verdict.mjs';
@@ -26,15 +25,7 @@ export const ATTACK_KINDS = {
   'do-nothing': 'leaving things as they are does as well',
 };
 // The invention lab attacks with one kind more: the thing, as it is built, cannot do it.
-// The design studio attacks a direction for what a design must not be: a copy, an assembly of effects, generic, slop.
-export const attackKinds = (session) => (isStudio(session) ? STUDIO_ATTACK_KINDS : isLab(session) ? LAB_ATTACK_KINDS : ATTACK_KINDS);
-// What a session calls the ideas it debates.
-export const unitOf = (session) => (isStudio(session) ? 'direction' : isLab(session) ? 'invention' : isVenture(session) ? 'bet' : 'idea');
-// A seat of the studio sends at most one direction made by joining known patterns of the web; the seat whose ground
-// is patterns is the one that may send more. Joining what was seen elsewhere is allowed, and is never what the room
-// mostly does.
-const ASSEMBLY_SEAT = 'combiner';
-const MAX_ASSEMBLIES = 1;
+export const attackKinds = (session) => (isLab(session) ? LAB_ATTACK_KINDS : ATTACK_KINDS);
 const STANCES = ['refute', 'narrow', 'concede'];
 const HYPOTHESIS_PARTS = ['change', 'effect', 'because', 'trigger', 'killCondition'];
 const TEST_PARTS = ['what', 'metric', 'threshold', 'checkAfter'];
@@ -225,13 +216,7 @@ export function turns(session, record, verdicts = null) {
     list.push({ role: 'anatomist', name: 'the anatomist', model: 'strongest', threads: [], done: turnTaken(session, 'anatomist'), ...done('anatomist', 'anatomy') });
     list.push({ role: 'genre', name: 'the genre scout', model: 'strongest', threads: [], done: turnTaken(session, 'genre'), optional: true, ...done('genre') });
     list.push({ role: 'voice', name: 'the voice scout', model: 'standard', threads: [], done: turnTaken(session, 'voice'), optional: true, ...done('voice') });
-    if (isStudio(session)) {
-      // The studio also looks at the field: what wins awards now, and what template and machine-made sites look like.
-      list.push({ role: 'awards', name: 'the awards scout', model: 'strongest', threads: [], done: turnTaken(session, 'awards'), optional: true, ...done('awards') });
-      list.push({ role: 'slop', name: 'the slop scout', model: 'standard', threads: [], done: turnTaken(session, 'slop'), optional: true, ...done('slop') });
-    }
-    list.push({ role: 'tech', name: isStudio(session) ? 'the craft scan' : 'the tech scan', model: 'standard', threads: [], done: turnTaken(session, 'tech'), optional: true, ...done('tech') });
-    if (isStudio(session)) for (const t of list) if (t.role === 'genre') t.name = 'the sector scout';
+    list.push({ role: 'tech', name: 'the tech scan', model: 'standard', threads: [], done: turnTaken(session, 'tech'), optional: true, ...done('tech') });
   }
   // At the study the person reads what the lab understood; what they correct, the anatomist revises.
   if (session.phase === 'study' && session.study?.pending) list.push({ role: 'anatomist', name: 'the anatomist, to revise the anatomy', model: 'strongest', threads: [], done: false });
@@ -297,9 +282,8 @@ function checkHypothesis(s, at, ctx, role) {
   errors.push(...whereErrors(s.where, `${at}.where`, { required: !isFramed(session) && WHERE_SCALES.includes(s.scale) }));
   errors.push(...priorArtErrors(s.priorArt, `${at}.priorArt`, new Set(ctx.evidence.entries.map((e) => e.id))));
   if (isLab(session)) {
-    const given = { session, frame: loadFrame(ctx.dir), anatomy: loadAnatomy(ctx.dir), pass: passOf(session), role };
-    errors.push(...(isStudio(session) ? directionErrors(s, at, given) : inventionErrors(s, at, given)));
-    if (s.uncovered !== undefined) errors.push(`${at}.uncovered: ${isStudio(session) ? 'a direction' : 'an invention'} says where it comes from with "answers" or "provocation"`);
+    errors.push(...inventionErrors(s, at, { session, frame: loadFrame(ctx.dir), anatomy: loadAnatomy(ctx.dir), pass: passOf(session), role }));
+    if (s.uncovered !== undefined) errors.push(`${at}.uncovered: an invention says where it comes from with "answers" or "provocation"`);
   } else if (isVenture(session)) {
     errors.push(...betErrors(s, at, { session, frame: loadFrame(ctx.dir), pass: passOf(session), role }));
     if (s.uncovered !== undefined) errors.push(`${at}.uncovered: a bet of the venture board says where it comes from with "answers" or "provocation"`);
@@ -464,12 +448,8 @@ export function say(ctx, role, statements, { now = () => new Date().toISOString(
   }
   if (session.phase === 'propose' && passOf(session) === 2) {
     const have = record.threads.filter((t) => t.by === role && t.pass === 2).length;
-    if (have + pending.length < SECOND_MIN && !repeated) errors.push(isFramed(session) ? `The second pass asks for at least ${SECOND_MIN} ${unitOf(session)} harvested from a provocation: see "The second pass" in your instructions.` : `The second pass asks for at least ${SECOND_MIN} idea on ground none of the ideas on the table covers. Look where nobody looked: see "The second pass" in your instructions.`);
+    if (have + pending.length < SECOND_MIN && !repeated) errors.push(isFramed(session) ? `The second pass asks for at least ${SECOND_MIN} ${isLab(session) ? 'invention' : 'bet'} harvested from a provocation: see "The second pass" in your instructions.` : `The second pass asks for at least ${SECOND_MIN} idea on ground none of the ideas on the table covers. Look where nobody looked: see "The second pass" in your instructions.`);
     if (have + pending.length > SECOND_MAX) errors.push(`At most ${SECOND_MAX} ideas in the second pass: you have ${have} and sent ${pending.length} more. Keep the furthest from what is on the table.`);
-  }
-  if (session.phase === 'propose' && isStudio(session) && role !== ASSEMBLY_SEAT) {
-    const assemblies = record.statements.filter((x) => x.type === 'hypothesis' && x.by === role && x.madeFrom === 'assembly').length + pending.filter((x) => x.madeFrom === 'assembly').length;
-    if (pending.some((x) => x.madeFrom === 'assembly') && assemblies > MAX_ASSEMBLIES) errors.push(`At most ${MAX_ASSEMBLIES} of your directions may be an assembly of known patterns of the web (you have ${assemblies}). Make the others from something the business has, from one idea about what it is, or from a field far from the web: a direction is not made by joining what was seen elsewhere.`);
   }
   if (errors.length) return { errors, warnings };
 
@@ -497,7 +477,7 @@ export function say(ctx, role, statements, { now = () => new Date().toISOString(
         test: Object.fromEntries(Object.entries(s.test).map(([k, v]) => [k, one(v)])), effort: s.effort, scale: s.scale,
         ...(s.where?.length ? { where: cleanWhere(s.where) } : {}),
         priorArt: cleanPriorArt(s.priorArt),
-        ...(isStudio(session) ? cleanDirection(s) : isLab(session) ? cleanInvention(s) : isVenture(session) ? cleanBet(s) : {}),
+        ...(isLab(session) ? cleanInvention(s) : isVenture(session) ? cleanBet(s) : {}),
         ...(pass === 2 && !isFramed(session) ? { pass, uncovered: one(s.uncovered) } : pass === 2 ? { pass } : {}),
         ...(s.returns ? { returns: s.returns, whatChanged: one(s.whatChanged) } : {}),
       });
@@ -670,7 +650,7 @@ export function advance(ctx, { force = false, ideas = [], date } = {}) {
       else if (isLab(session)) {
         errors = hold();
         // Nothing is invented for a thing nobody has studied: the anatomy cannot be skipped, not even with --force.
-        if (!errors.length && !session.study?.anatomy) errors = [`The anatomy has not been saved: start the anatomist. The ${isStudio(session) ? 'studio designs for the business it studied' : 'lab invents for the thing it studied'}, so this turn cannot be skipped.`];
+        if (!errors.length && !session.study?.anatomy) errors = ['The anatomy has not been saved: start the anatomist. The lab invents for the thing it studied, so this turn cannot be skipped.'];
         if (!errors.length) go('study', 0, 'show');
       } else if (isVenture(session)) go('frame', 0, 'frame');
       else go('track-record');
@@ -792,13 +772,13 @@ export function nextStep(session, record, evidence, verdicts = null) {
     case 'track-record': return 'Check the ideas whose test date has passed, then run "next".';
     case 'study': {
       if (session.study?.pending) return 'The person corrected the anatomy: start the anatomist, to revise it. Then run "next".';
-      return `Show the person what the ${isStudio(session) ? 'studio' : 'lab'} understood ("study --show") and ask what is wrong or missing. Save each correction with "study --correct"; with none, run "next".`;
+      return 'Show the person what the lab understood ("study --show") and ask what is wrong or missing. Save each correction with "study --correct"; with none, run "next".';
     }
     case 'propose': {
       const pass = passOf(session) === 2 ? 'second pass' : 'first pass';
       if (debateSpent(session)) return `The debate has used its agent runs, so no more proposers are started. ${waiting.length ? `Wait for ${names}, already started, then run "next"` : 'Run "next"'} with what was proposed.`;
       if (waiting.length) return `Proposals, ${pass}: start the proposers, all at once: ${names}.`;
-      if (isFramed(session)) return passOf(session) === 1 ? 'Everyone has proposed. Run "next" for the second pass, where each seat harvests the provocations.' : `Both passes are done. Run "next": every ${unitOf(session)} is given to another seat to build on.`;
+      if (isFramed(session)) return passOf(session) === 1 ? 'Everyone has proposed. Run "next" for the second pass, where each seat harvests the provocations.' : `Both passes are done. Run "next": every ${isLab(session) ? 'invention' : 'bet'} is given to another seat to build on.`;
       return passOf(session) === 1 ? 'Everyone has proposed. Run "next" for the second pass, where each proposer sees the themes on the table and looks elsewhere.' : 'Both passes are done. Run "next" for the docket.';
     }
     case 'frame': {
@@ -806,7 +786,7 @@ export function nextStep(session, record, evidence, verdicts = null) {
       if (session.step === 'frame') return waiting.length ? 'Start the framer.' : 'The frame is saved. Run "next": the provocateur writes the provocations.';
       return waiting.length ? 'Start the provocateur.' : 'The frame and the provocations are saved. Show the person the framings ("frame --show") and ask which matter; save their pick with "frame --pick H1,C2", or go on without one. Then run "next".';
     }
-    case 'amplify': return names ? `Every ${unitOf(session)} goes to another seat to ${isStudio(session) ? 'take it further' : 'make it bigger'}: start, all at once: ${names}.` : `Every ${unitOf(session)} has been built on. Run "next" for the docket.`;
+    case 'amplify': return names ? `Every ${isLab(session) ? 'invention' : 'bet'} goes to another seat to make it bigger: start, all at once: ${names}.` : `Every ${isLab(session) ? 'invention' : 'bet'} has been built on. Run "next" for the docket.`;
     case 'docket': return record.docket ? 'The docket is saved. Run "next" to open the examination.' : 'Start the judge for the docket.';
     case 'examine': {
       if (debateSpent(session)) return `The debate has used its agent runs, so nobody more is started in it: a refusal for the budget is final and is not retried. ${waiting.length ? `Wait for ${names}, already started, then run "next"` : 'Run "next"'}: the judge rules on what is there.`;

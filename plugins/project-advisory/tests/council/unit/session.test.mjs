@@ -165,6 +165,8 @@ test('the budget and the data folder are checked before anything is created', ()
   assert.throws(() => createSession(root, { budget: 'many' }), /--budget must be a whole number/);
   assert.throws(() => createSession(root, { data: path.join(root, 'nowhere') }), /Data folder not found/);
   assert.throws(() => councilInit({ root, url: 'acme.test' }), /Invalid URL/);
+  // The design studio has its own script: these scripts run the council, the venture board and the lab only.
+  assert.throws(() => councilInit({ root, kind: 'studio' }), /Unknown --kind "studio": council, venture, lab/);
   assert.deepEqual(listSessions(root), []);
   assert.equal(createSession(root, { budget: '30', data: root }).session.budget, 30);
 });

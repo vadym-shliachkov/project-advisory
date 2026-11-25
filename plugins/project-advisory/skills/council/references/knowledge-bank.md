@@ -68,8 +68,8 @@ Groups in use:
 | one group per health area (`hosting.*`, `seo.*`, …) | the project-health skill | What its analysis observed |
 | `council.goal` | a person, through the council skill | The goal the council works towards |
 | `owner.considered`, `owner.offLimits` | a person, through the council skill | What the person already plans or has thought of, and what is off limits: the council looks past it |
-| `owner.likes`, `owner.dislikes` | a person, through the design studio | Sites and things the person likes or cannot stand, with the reason |
-| `studio.*` | a person, through the design studio | The brief for a design: what the business is and who comes to its site (`studio.brief`), what it has that is its own (`studio.material`), the question the studio works on (`studio.goal`) |
+| `owner.likes`, `owner.dislikes` | a person, through an earlier version of the design studio; the studio reads them | Sites and things the person likes or cannot stand, with the reason |
+| `studio.*` | a person, through an earlier version of the design studio; the studio reads them | The brief for a design: what the business is and who comes to its site (`studio.brief`), what it has that is its own (`studio.material`), the question the studio works on (`studio.goal`) |
 | `market.*` | the council skill | Competitors and what they do; what was observed about the audience |
 | `metric.*` | the council skill, or a person | Numbers with a history: enquiries, visits, positions |
 
@@ -90,10 +90,10 @@ It is written by a skill that agrees these things with the people in a discussio
 
 ```json
 { "id": "K4", "kind": "forbidden", "title": "No dark backgrounds", "detail": "Never a dark background: our customers are over sixty and read us in daylight.",
-  "scope": "design", "source": "person", "by": "studio", "ideaIds": ["I31"], "addedAt": "2026-11-24", "updatedAt": "2026-11-24" }
+  "scope": "design", "source": "person", "by": "council", "ideaIds": ["I31"], "addedAt": "2026-11-24", "updatedAt": "2026-11-24" }
 ```
 
-A rejected idea is kept in the ledger with its reason, which stops that one idea. When the reason reaches past the idea, it is a rule, and it is saved as a note (`forbidden`, `constraint` or `decision`) that names the idea in `ideaIds` and the skill in `by`; a strong "more of this" is saved as a `preference`. `scope` says where a rule applies; without it, it applies everywhere. Only the person's own words are saved, and only the person retires a note. A skill leaves every note it did not write, and every person, exactly as they are.
+A rejected idea is kept in the ledger with its reason, which stops that one idea. When the reason reaches past the idea, it is a rule, and it is saved as a note (`forbidden`, `constraint` or `decision`) that names the idea in `ideaIds` and the skill in `by`; a strong "more of this" is saved as a `preference`. The design studio keeps no ideas in the ledger, so its notes name none. `scope` says where a rule applies; without it, it applies everywhere. Only the person's own words are saved, and only the person retires a note. A skill leaves every note it did not write, and every person, exactly as they are.
 
 Every skill reads the notes and respects them: nothing is proposed that a `forbidden` or `constraint` note rules out, **under any name**; nothing a `decision` note settled is asked again; a `preference` is leaned towards where it fits. The judge's docket refuses what slipped through, with the note's id.
 
@@ -129,7 +129,7 @@ The council skill writes this file. Other skills read it.
 
 ## groundwork/
 
-Written by the council, the venture board, the invention lab and the design studio (all run on the council's scripts); read by all four. The council and the venture board share the primer, the competitor scan and the horizon scan; the lab writes and reads its own: the anatomy of the thing (reused only while the project's code has not changed), its genre, what its users say and what has become possible for things of its kind. The studio keeps its own beside them, because it asks another question of the same project: `studio-anatomy.json` (the site and the business, with what the business has that a design could be made of), `studio-genre.json` (how sites of the trade work), `studio-tech.json` (what the web can now do for type and motion), `awards.json` (what wins awards now: the sites looked at and the patterns they share, fresh for 30 days) and `slop.json` (what template and machine-made sites look like, fresh for 30 days); it shares `voice.json` with the lab. Each file is the latest research of its kind, replaced whole when it is done again:
+Written by the council, the venture board and the invention lab (all run on the council's scripts); read by all three. The council and the venture board share the primer, the competitor scan and the horizon scan; the lab writes and reads its own: the anatomy of the thing (reused only while the project's code has not changed), its genre, what its users say and what has become possible for things of its kind. The design studio has its own script and keeps its study in its own sessions, not here. Each file is the latest research of its kind, replaced whole when it is done again:
 
 ```json
 { "kind": "competitors", "at": "2026-11-17", "url": "https://example.com",

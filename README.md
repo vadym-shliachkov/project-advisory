@@ -178,7 +178,7 @@ The session ends with `page/index.html`, its pictures, and `concept.md`, a one-p
 
 ## What the person says
 
-When the person turns an idea down, the ledger keeps the idea with their reason, and it is not proposed again. When the reason reaches past that one idea ("no dark backgrounds: our customers are over sixty"), it is a rule, and the usher of any of the four debating skills saves it as a note in `kb/knowledge.json`, in the person's words, with the idea it was said of; a strong "more of this" is saved as a preference. When it is not clear whether a reason is a rule, the usher asks once. Every later session, of any of the skills, reads the notes: nothing a rule forbids is proposed under another name, and the judge's docket refuses what slipped through. Only the person retires a note.
+When the person turns an idea down, the ledger keeps the idea with their reason, and it is not proposed again. When the reason reaches past that one idea ("no dark backgrounds: our customers are over sixty"), it is a rule, and the usher of the council, the venture board or the invention lab saves it as a note in `kb/knowledge.json`, in the person's words, with the idea it was said of; a strong "more of this" is saved as a preference. The design studio saves such rules too, with its own `note` command, about the concept rather than an idea in the ledger. When it is not clear whether a reason is a rule, the usher asks once. Every later session, of any of the skills, reads the notes: nothing a rule forbids is proposed under another name, and the judge's docket refuses what slipped through. Only the person retires a note.
 
 ```bash
 node plugins/project-advisory/skills/council/scripts/council.mjs note --root <project> --show

@@ -17,7 +17,7 @@ const STRENGTH_ORDER = ['strong', 'fair', 'speculative'];
 const EFFORT_ORDER = ['small', 'medium', 'large'];
 // The survivors are listed from the furthest-reaching: a bet on direction is a decision for the owner, a change to a
 // page is work for whoever keeps the site.
-const SCALE_ORDER = ['new', 'direction', 'reinvention', 'redesign', 'refresh', 'remake', 'product', 'feature', 'addition', 'adjustment', null];
+const SCALE_ORDER = ['new', 'direction', 'remake', 'product', 'feature', 'addition', 'adjustment', null];
 export const BOLD = ['new', 'direction'];
 const lived = (r) => r.verdict === 'survived' || r.verdict === 'narrowed';
 
@@ -74,9 +74,6 @@ export function buildModel(ctx, root) {
       // An invention of the lab: how a person would live it, what of the thing it grows from, and how new it is, as
       // claimed and as ruled.
       ...(h.experience ? { invention: { experience: h.experience, buildsOn: h.buildsOn, claimed: h.newTo, newTo: ruling?.newTo ?? null, feasible: ruling?.feasible ?? null } } : {}),
-      // A direction of the design studio: the design its idea leads to, what it is made from as proposed, and what the
-      // judge ruled on it (the swap test, what it is made from after the debate, its signature moment).
-      ...(h.design ? { direction: { design: h.design, madeFrom: h.madeFrom, ...(h.whole ? { whole: h.whole } : {}), ruled: { swap: ruling?.swap ?? null, madeFrom: ruling?.madeFrom ?? null, whole: ruling?.whole ?? null, signature: ruling?.signature ?? null } } } : {}),
       where: narrowed?.where ?? h.where ?? [], novelty: t.novelty ?? null, pass: t.pass ?? 1, uncovered: h.uncovered ?? null,
       priorArt: h.priorArt ?? null,
       test: narrowed ? narrowed.test ?? said.filter((s) => s.type === 'reply' && s.by === t.by && s.narrowed?.test).at(-1)?.narrowed.test ?? h.test : h.test,
@@ -249,7 +246,7 @@ export function validateSuggestions(doc, model, { strict = true } = {}) {
     if (strict) for (const w of idea.where) if (!linked.has(sameUrl(w.url))) errors.push(`${at}: link the page this idea changes where you first name it, as [${w.part.length > 40 ? 'the page' : w.part}](${w.url}): the reader does not know the site by heart`);
     const s = unlinked(raw);
     if (kind === 'venture') errors.push(...ventureSurvivorErrors(s, at));
-    else if (kind === 'lab' || kind === 'studio') errors.push(...inventionSurvivorErrors(s, at));
+    else if (kind === 'lab') errors.push(...inventionSurvivorErrors(s, at));
     else {
       for (const [field, [min, max]] of Object.entries(TEXTS)) errors.push(...textErrors(s[field], `${at}.${field}`, min, max));
       if (!strict && s.upside !== undefined) errors.push(...textErrors(s.upside, `${at}.upside`, ...SURVIVOR_TEXTS.upside));
@@ -264,7 +261,7 @@ export function validateSuggestions(doc, model, { strict = true } = {}) {
     else if (!Array.isArray(s.fromYou) || s.fromYou.length > 3) errors.push(`${at}.fromYou: up to three points, [] when it needs nothing from the owner`);
     else s.fromYou.forEach((x, j) => errors.push(...textErrors(x, `${at}.fromYou[${j}]`, 10, 200)));
     const keys = kind === 'venture' ? ['idea', ...Object.keys(VENTURE_SURVIVOR_TEXTS), 'pressRelease', 'faq', 'needs', 'fromYou']
-      : kind === 'lab' || kind === 'studio' ? ['idea', ...Object.keys(INVENTION_TEXTS), 'experience', 'survived', 'uncertain', 'needs', 'fromYou', 'fitsWith']
+      : kind === 'lab' ? ['idea', ...Object.keys(INVENTION_TEXTS), 'experience', 'survived', 'uncertain', 'needs', 'fromYou', 'fitsWith']
         : ['idea', ...Object.keys(SURVIVOR_TEXTS), 'survived', 'uncertain', 'needs', 'fromYou', 'fitsWith'];
     for (const key of Object.keys(s)) if (!keys.includes(key)) errors.push(`${at}: unknown property "${key}"`);
 

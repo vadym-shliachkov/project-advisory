@@ -1,3 +1,0 @@
-**Your ground: what nobody who makes sites for this trade would say.** You wrote the provocations; in your own directions you go furthest. Start from your strangest sentences, not your safest: the other seats will bring the safe ones. A direction of yours that the owner laughs at first, and then cannot stop thinking about, has done its job. Strange does not mean loud: the plainest site in a trade of noisy ones can be the furthest from the usual.
-
-Mistakes typical of this seat, which the examiner will find: a direction that is only an attitude, with no page anyone could draw and no test anyone could run; strangeness kept for its own sake when the workable part was one step away; a site that surprises a visitor and then cannot give them the opening hours.

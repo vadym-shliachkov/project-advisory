@@ -8,11 +8,7 @@ import { buildBriefHtml } from './brief.mjs';
 import { buildBetsHtml } from './venturedoc.mjs';
 import { buildInventionsHtml } from './inventdoc.mjs';
 import { loadFrame, loadCards } from './frame.mjs';
-import { isLab, isInventionLab, isStudio, isVenture, isFramed } from './session.mjs';
-import { buildDirectionsHtml } from './directiondoc.mjs';
-import { loadCurrents, loadSlop, currentsPath, slopPath } from './field.mjs';
-import { loadTiles, validateTiles, writeTiles, shootTiles, picturesOfTile, validateEye, eyeAsks, handoffMarkdown, writeHandoffs, tilesPath, tilePicture, TILE_VIEWS, loadDraft, saveDraft, cleanTile } from './tiles.mjs';
-import { loadKnowledge } from './bank.mjs';
+import { isLab, isVenture, isFramed } from './session.mjs';
 import { loadAnatomy, loadGenre, anatomyPath, genrePath } from './anatomy.mjs';
 import { loadSketches, saveSketches, validateSketches, sketchesPath } from './sketch.mjs';
 import { sketchFormFor, OBJECT_WORDS } from './object.mjs';
@@ -30,18 +26,13 @@ export const DOCS = ['brief', 'suggestions', 'discussion'];
 export const VENTURE_DOCS = ['brief', 'bets'];
 // The invention lab writes the brief, the inventions (each with a sketch of what it could look like) and the minutes.
 export const LAB_DOCS = ['brief', 'inventions', 'discussion'];
-// The design studio writes the brief and the directions, with a working tile of each direction that survived and a
-// handoff file for whoever builds the site. It writes no minutes: a direction is looked at, not read about.
-export const STUDIO_DOCS = ['brief', 'directions'];
-export const docsFor = (session) => (isStudio(session) ? STUDIO_DOCS : isLab(session) ? LAB_DOCS : isVenture(session) ? VENTURE_DOCS : DOCS);
+export const docsFor = (session) => (isLab(session) ? LAB_DOCS : isVenture(session) ? VENTURE_DOCS : DOCS);
 // The document the writer writes in full, beside the brief built from it.
-const mainDoc = (session) => (isStudio(session) ? 'directions' : isLab(session) ? 'inventions' : isVenture(session) ? 'bets' : 'suggestions');
-const noMinutes = (session) => isVenture(session) || isStudio(session);
-export const DOC_STAFF = ['narrator', 'writer', 'sketcher', 'prototyper', 'eye', 'fidelity', 'critic', 'layout-brief', 'layout-suggestions', 'layout-discussion', 'layout-bets', 'layout-inventions', 'layout-directions'];
+const mainDoc = (session) => (isLab(session) ? 'inventions' : isVenture(session) ? 'bets' : 'suggestions');
+export const DOC_STAFF = ['narrator', 'writer', 'sketcher', 'fidelity', 'critic', 'layout-brief', 'layout-suggestions', 'layout-discussion', 'layout-bets', 'layout-inventions'];
 const MAX_LAYOUT_ROUNDS = 2;
 const STAFF_NAMES = {
   narrator: 'the librarian, who writes the minutes', writer: 'the writer of the suggestions', sketcher: 'the sketcher, who draws each invention that survived', fidelity: 'the fidelity reviewer', critic: 'the literary critic',
-  prototyper: 'the prototyper, who builds a working tile of each direction that survived', eye: 'the stranger, who looks at each tile without being told what it is for', 'layout-directions': 'the layout reviewer of the directions',
   'layout-bets': 'the layout reviewer of the bets', 'layout-inventions': 'the layout reviewer of the inventions', 'layout-brief': 'the layout reviewer of the decision brief', 'layout-suggestions': 'the layout reviewer of the suggestions', 'layout-discussion': 'the layout reviewer of the discussion',
 };
 const staffName = (session, role) => (role === 'writer' && !isLab(session) && !isVenture(session) ? STAFF_NAMES.writer
@@ -51,24 +42,19 @@ const file = (dir, name) => path.join(dir, name);
 const has = (dir, name) => fs.existsSync(file(dir, name));
 const docsOf = (session) => (session.docs ??= { rendered: 0, revised: false, stale: false });
 
-const contentDefects = (s) => ['brief', 'suggestions', 'bets', 'inventions', 'directions'].some((d) => s.layouts[d]?.defects.some((x) => x.cause === 'content'));
+const contentDefects = (s) => ['brief', 'suggestions', 'bets', 'inventions'].some((d) => s.layouts[d]?.defects.some((x) => x.cause === 'content'));
 
 export function docState(ctx, root) {
   const { dir, session } = ctx;
   const model = buildModel(ctx, root);
   const suggestions = loadDoc(dir, 'suggestions');
   const discussion = loadDoc(dir, 'discussion');
-  const reviews = { fidelity: loadDoc(dir, 'review-fidelity'), critic: loadDoc(dir, 'review-critic'), eye: loadDoc(dir, 'review-eye') };
+  const reviews = { fidelity: loadDoc(dir, 'review-fidelity'), critic: loadDoc(dir, 'review-critic') };
   const layouts = Object.fromEntries(docsFor(session).map((d) => [d, loadDoc(dir, `layout-${d}`)]));
-  const sketches = isInventionLab(session) ? loadSketches(dir) : null;
+  const sketches = isLab(session) ? loadSketches(dir) : null;
   // Every invention that survived is sketched; with none, there is nothing to draw.
-  const unsketched = isInventionLab(session) ? model.survivors.filter((i) => !(sketches?.sketches ?? []).some((k) => k.idea === i.id)) : [];
-  // Every direction that survived is built as a tile.
-  const tiles = isStudio(session) ? loadTiles(dir) : null;
-  const untiled = isStudio(session) ? model.survivors.filter((i) => !(tiles?.tiles ?? []).some((k) => k.idea === i.id)) : [];
-  // The stranger can look only at tiles that were photographed.
-  const pictured = (tiles?.tiles ?? []).filter((t) => has(dir, tilePicture(t.idea, TILE_VIEWS[0])));
-  return { model, suggestions, discussion, sketches, unsketched, tiles, untiled, pictured, gaps: noMinutes(session) ? [] : discussionGaps(discussion, model), reviews, layouts, docs: docsOf(session), pdf: Object.fromEntries(docsFor(session).map((d) => [d, has(dir, `${d}.pdf`) ? file(dir, `${d}.pdf`) : null])) };
+  const unsketched = isLab(session) ? model.survivors.filter((i) => !(sketches?.sketches ?? []).some((k) => k.idea === i.id)) : [];
+  return { model, suggestions, discussion, sketches, unsketched, gaps: isVenture(session) ? [] : discussionGaps(discussion, model), reviews, layouts, docs: docsOf(session), pdf: Object.fromEntries(docsFor(session).map((d) => [d, has(dir, `${d}.pdf`) ? file(dir, `${d}.pdf`) : null])) };
 }
 
 // Whose turn it is while the documents are made.
@@ -79,23 +65,11 @@ export function docTurns(ctx, root) {
   const turn = (role, done, extra = {}) => ({ role, name: staffName(session, role), model: 'strongest', threads: [], done, ...extra });
   if (session.phase === 'write') {
     if (isVenture(session)) return [turn('writer', Boolean(s.suggestions))];
-    if (isStudio(session)) {
-      // The writer and the prototyper work side by side. Once every direction has its tile and the tiles are
-      // photographed, a stranger looks at the pictures, once; a tile they could not tell from any business's, or found
-      // something grave in, goes back to the prototyper, once. All of it before the documents are printed, so they
-      // are printed with what the stranger saw.
-      const list = [turn('writer', Boolean(s.suggestions))];
-      if (!s.model.survivors.length) return list;
-      const back = eyeAsks(s.reviews.eye).length > 0 && !s.docs.tilesRevised;
-      list.push(turn('prototyper', !s.untiled.length && !back));
-      if (!s.untiled.length && s.pictured.length) list.push(turn('eye', Boolean(s.reviews.eye)));
-      return list;
-    }
     const list = [turn('narrator', !s.gaps.length), turn('writer', Boolean(s.suggestions))];
     if (isLab(session) && s.model.survivors.length) list.push(turn('sketcher', !s.unsketched.length));
     return list;
   }
-  const list = noMinutes(session) ? [] : [turn('fidelity', Boolean(s.reviews.fidelity)), turn('critic', Boolean(s.reviews.critic))];
+  const list = isVenture(session) ? [] : [turn('fidelity', Boolean(s.reviews.fidelity)), turn('critic', Boolean(s.reviews.critic))];
   // A layout is looked at after every printing, twice at most; without a PDF there is nothing to look at.
   for (const d of docsFor(session)) {
     if (!s.pdf[d]) continue;
@@ -106,7 +80,7 @@ export function docTurns(ctx, root) {
   // writer once.
   if (contentDefects(s)) list.push(turn('writer', Boolean(s.docs.suggestionsRevised)));
   const issues = (s.reviews.fidelity?.issues.length ?? 0) + (s.reviews.critic?.issues.length ?? 0);
-  if (!noMinutes(session) && s.reviews.fidelity && s.reviews.critic && issues) list.push(turn('narrator', s.docs.revised));
+  if (s.reviews.fidelity && s.reviews.critic && issues) list.push(turn('narrator', s.docs.revised));
   return list;
 }
 
@@ -186,12 +160,9 @@ export function picturesOf(dir) {
   };
 }
 
-// The picture of a direction's tile for the brief, with the page it opens. `up` is the way back to the session folder.
-const tileOf = (studio, up = '') => (idea) => { const t = studio.tiles.find((x) => x.idea === idea.id); const src = t ? studio.pictures(idea.id).desktop : null; return src ? { src: `${up}${src}`, href: `${up}${t.file}`, caption: t.caption } : null; };
-
 // Writes the documents as HTML and prints them, and builds the session's site from them. Without a browser the HTML
 // is the document.
-export function renderDocs(ctx, root, { only = null, html = false, browser = findBrowser(), print = printPdf, shoot = undefined } = {}) {
+export function renderDocs(ctx, root, { only = null, html = false, browser = findBrowser(), print = printPdf } = {}) {
   const { dir, session } = ctx;
   const s = docState(ctx, root);
   const errors = [];
@@ -199,7 +170,7 @@ export function renderDocs(ctx, root, { only = null, html = false, browser = fin
   const all = docsFor(session);
   const wanted = only ? [only] : all;
   if (only && !all.includes(only)) return { errors: [`Unknown --doc "${only}". Valid documents: ${all.join(', ')}`], warnings };
-  const fromWriter = wanted.some((d) => ['suggestions', 'brief', 'bets', 'inventions', 'directions'].includes(d));
+  const fromWriter = wanted.some((d) => ['suggestions', 'brief', 'bets', 'inventions'].includes(d));
   if (fromWriter && !s.suggestions) errors.push(`The ${mainDoc(session)} have not been written yet.`);
   if (fromWriter && s.suggestions) errors.push(...validateSuggestions(s.suggestions, s.model, { strict: false }).map((e) => `suggestions: ${e}`));
   if (wanted.includes('discussion') && s.gaps.length) errors.push(`The discussion is not complete: ${s.gaps.join('; ')}.`);
@@ -207,19 +178,8 @@ export function renderDocs(ctx, root, { only = null, html = false, browser = fin
 
   const kind = kindOf(session);
   const lab = isLab(session) ? { anatomy: loadAnatomy(dir), genre: loadGenre(dir), sketches: s.sketches?.sketches ?? [] } : {};
-  // The tiles are photographed before the documents that show them are written; a tile that changed is taken again.
-  const studio = {};
-  if (isStudio(session)) {
-    const tiles = s.tiles?.tiles ?? [];
-    const shot = html ? { taken: 0, warnings: [] } : shootTiles(dir, tiles, browser, shoot ? { shoot } : {});
-    warnings.push(...shot.warnings);
-    // What the stranger saw is printed beside each tile, with a word when the tile was revised after that look.
-    const eye = s.reviews.eye ? { ...s.reviews.eye, revisedAfter: s.docs.tilesRevised ? eyeAsks(s.reviews.eye) : [] } : null;
-    Object.assign(studio, { currents: loadCurrents(dir), slop: loadSlop(dir), tiles, eye, pictures: (id) => picturesOfTile(dir, id) });
-  }
   const build = {
-    directions: () => buildDirectionsHtml({ model: s.model, suggestions: s.suggestions, frame: loadFrame(dir), cards: loadCards(kind), parts: partsOf(dir), ...lab, ...studio }),
-    brief: () => buildBriefHtml({ model: s.model, suggestions: s.suggestions, ...(studio.tiles ? { tile: tileOf(studio) } : {}) }),
+    brief: () => buildBriefHtml({ model: s.model, suggestions: s.suggestions }),
     bets: () => buildBetsHtml({ model: s.model, suggestions: s.suggestions, frame: loadFrame(dir), cards: loadCards(kind), parts: partsOf(dir) }),
     inventions: () => buildInventionsHtml({ model: s.model, suggestions: s.suggestions, frame: loadFrame(dir), cards: loadCards(kind), parts: partsOf(dir), ...lab }),
     suggestions: () => buildSuggestionsHtml({ model: s.model, suggestions: s.suggestions, discussion: s.gaps.length ? null : s.discussion, picture: picturesOf(dir), parts: partsOf(dir) }),
@@ -251,19 +211,12 @@ export function renderDocs(ctx, root, { only = null, html = false, browser = fin
   // The site is built from all of it, so only when the whole set is rendered.
   let site = null;
   if (!only && !s.gaps.length) {
-    try { site = buildSite({ ctx, root, frame: isFramed(session) ? loadFrame(dir) : null, model: s.model, suggestions: s.suggestions, discussion: s.discussion, picture: picturesOf(dir), parts: partsOf(dir), ...lab, ...(isStudio(session) ? { currents: studio.currents, slop: studio.slop, tiles: studio.tiles, tilePictures: studio.pictures, eye: studio.eye, briefTile: tileOf(studio, '../') } : {}) }); } catch (e) { warnings.push(`The session's pages could not be built (${String(e.message).trim()}); the documents are not affected.`); }
-  }
-  // One file per direction that survived, for whoever builds the site.
-  let handoff = null;
-  if (isStudio(session) && !only && s.suggestions) {
-    const written = new Map((s.suggestions.survivors ?? []).map((x) => [x.idea, x]));
-    const rules = loadKnowledge(root).notes.filter((n) => ['forbidden', 'constraint'].includes(n.kind));
-    handoff = writeHandoffs(dir, s.model.survivors.map((idea) => ({ id: idea.id, markdown: handoffMarkdown({ idea, written: written.get(idea.id), tile: studio.tiles.find((t) => t.idea === idea.id) ?? null, eye: (studio.eye?.tiles ?? []).find((t) => t.idea === idea.id) ?? null, slop: studio.slop?.slop ?? null, rules, anatomy: lab.anatomy, session: { id: session.id, brand: s.model.brand.name } }) })));
+    try { site = buildSite({ ctx, root, frame: isFramed(session) ? loadFrame(dir) : null, model: s.model, suggestions: s.suggestions, discussion: s.discussion, picture: picturesOf(dir), parts: partsOf(dir), ...lab }); } catch (e) { warnings.push(`The session's pages could not be built (${String(e.message).trim()}); the documents are not affected.`); }
   }
   const docs = docsOf(session);
   docs.rendered += 1;
   docs.stale = false;
-  return { errors, warnings: [...new Set(warnings)], documents: out, ...(site ? { site } : {}), ...(handoff ? { handoff } : {}), rendered: docs.rendered };
+  return { errors, warnings: [...new Set(warnings)], documents: out, ...(site ? { site } : {}), rendered: docs.rendered };
 }
 
 // From writing to reviewing: both documents must be there, and they are printed on the way.
@@ -282,36 +235,17 @@ export function advanceDocs(ctx, root, { force = false, render = renderDocs } = 
   // No document is skipped: a writer that keeps failing ends the session with "close --abandon", and the verdicts
   // already in the ledger stand.
   errors.push(...unsketched);
-  // A direction without a tile is a description: a prototyper that keeps failing leaves the directions unseen, said so.
-  if (s.untiled.length && !force) errors.push(`${s.untiled.length} direction${s.untiled.length > 1 ? 's have' : ' has'} no tile yet: start the prototyper (or pass --force to print without, and tell the person).`);
-  else if (isStudio(session) && !force) {
-    if (s.pictured.length && !s.reviews.eye) errors.push('Nobody has looked at the tiles yet: start the stranger (or pass --force to print without that look, and tell the person).');
-    else if (eyeAsks(s.reviews.eye).length && !s.docs.tilesRevised) errors.push(`The stranger sent ${eyeAsks(s.reviews.eye).join(', ')} back: start the prototyper, to revise ${eyeAsks(s.reviews.eye).length > 1 ? 'those tiles' : 'that tile'} (or pass --force to print them as they are, and tell the person).`);
-  }
   if (errors.length && force) errors.push('--force does not skip a document. If its writer keeps failing, tell the person which document is missing and set the session aside with "close --abandon": the verdicts are already in the idea ledger.');
   if (errors.length) return { errors, from, to: from, closed: [] };
   const printed = render(ctx, root);
   if (printed.errors.length) return { errors: printed.errors, from, to: from, closed: [] };
   session.phase = 'review';
-  return { errors: [], from, to: { phase: 'review', round: session.round, step: session.step }, closed: [], documents: printed.documents, site: printed.site ?? null, ...(printed.handoff ? { handoff: printed.handoff } : {}), warnings: printed.warnings };
+  return { errors: [], from, to: { phase: 'review', round: session.round, step: session.step }, closed: [], documents: printed.documents, site: printed.site ?? null, warnings: printed.warnings };
 }
 
 // ---- Saving what the writers and reviewers hand in ----
 
-// One page of a tile, handed in on its own as plain HTML: checked at once, and kept until the record of the tiles is
-// saved. The prototyper hands in each page this way and then saves the tiles without their pages.
-export function saveTilePage(ctx, root, idea, html) {
-  const { dir, session } = ctx;
-  if (!isStudio(session)) return { errors: ['Only the design studio builds tiles.'] };
-  if (session.phase !== 'write') return { errors: [`A tile is built once the verdicts are final and before the documents are printed; the session is in the ${session.phase} phase`] };
-  const survivors = buildModel(ctx, root).survivors;
-  if (!survivors.some((i) => i.id === idea)) return { errors: [`--idea: "${idea ?? ''}" is not a direction that survived; they are ${survivors.map((i) => i.id).join(', ') || 'none'}`] };
-  const { errors } = cleanTile(html, 'the page');
-  if (errors?.length) return { errors };
-  return { errors: [], path: saveDraft(dir, idea, String(html).trim()), characters: String(html).trim().length };
-}
-
-export function saveDocument(ctx, root, doc, data, { browser = findBrowser(), shoot = undefined } = {}) {
+export function saveDocument(ctx, root, doc, data) {
   const { dir, session } = ctx;
   if (!['write', 'review'].includes(session.phase)) return { errors: [`The documents are written after the verdicts are final; the session is in the ${session.phase} phase`] };
   const s = docState(ctx, root);
@@ -326,29 +260,7 @@ export function saveDocument(ctx, root, doc, data, { browser = findBrowser(), sh
     if (session.phase === 'review') docs.suggestionsRevised = true;
     return { errors, path: docPath(dir, 'suggestions'), survivors: data.survivors.length, questions: data.questions.length };
   }
-  if (doc === 'discussion' && noMinutes(session)) return { errors: [`The ${isStudio(session) ? 'design studio' : 'venture board'} writes no minutes.`] };
-  if (doc === 'tiles') {
-    if (!isStudio(session)) return { errors: ['Only the design studio builds tiles of what survived.'] };
-    const { errors, tiles, pages } = validateTiles(data, { survivors: s.model.survivors, draft: (id) => loadDraft(dir, id) });
-    if (errors.length) return { errors };
-    writeTiles(dir, tiles, pages);
-    changed();
-    // Saving the tiles again once the stranger has looked is the one revision they get.
-    if (s.reviews.eye) docs.tilesRevised = true;
-    // The tiles are photographed as they are saved: the stranger looks at the pictures, and the documents show them.
-    const shot = shootTiles(dir, tiles, browser, shoot ? { shoot } : {});
-    return { errors, path: tilesPath(dir), tiles: tiles.length, files: tiles.map((t) => file(dir, t.file)), pictures: shot.taken, ...(shot.warnings.length ? { warnings: shot.warnings } : {}) };
-  }
-  if (doc === 'review-eye') {
-    if (!isStudio(session)) return { errors: ['Only the design studio has its tiles looked at by a stranger.'] };
-    if (session.phase !== 'write') return { errors: ['The tiles are looked at once, before the documents are printed.'] };
-    if (!s.pictured.length) return { errors: ['No tile has been photographed, so there is nothing to look at.'] };
-    const errors = validateEye(data, { tiles: s.pictured });
-    if (errors.length) return { errors };
-    saveDoc(dir, doc, { ...data, reviewedAt: new Date().toISOString() });
-    const asks = eyeAsks(data);
-    return { errors, path: docPath(dir, doc), tiles: data.tiles.length, backToThePrototyper: asks };
-  }
+  if (doc === 'discussion' && isVenture(session)) return { errors: ['The venture board writes no minutes.'] };
   if (doc === 'sketches') {
     if (!isLab(session)) return { errors: ['Only the invention lab sketches what survived.'] };
     const { errors, sketches } = validateSketches(data, { survivors: s.model.survivors, form: sketchFormFor(session.object?.kind) });
@@ -376,7 +288,7 @@ export function saveDocument(ctx, root, doc, data, { browser = findBrowser(), sh
     const by = (sev) => data.issues.filter((i) => i.severity === sev).length;
     return { errors, path: docPath(dir, doc), issues: { high: by('high'), medium: by('medium'), low: by('low') } };
   }
-  const layout = /^layout-(brief|suggestions|discussion|bets|inventions|directions)$/.exec(doc ?? '')?.[1];
+  const layout = /^layout-(brief|suggestions|discussion|bets|inventions)$/.exec(doc ?? '')?.[1];
   if (layout) {
     if (!s.pdf[layout]) return { errors: [`${layout}.pdf has not been printed, so there is no layout to review`] };
     const pages = pdfPageCount(s.pdf[layout]);
@@ -388,7 +300,7 @@ export function saveDocument(ctx, root, doc, data, { browser = findBrowser(), sh
     const unseen = data.pagesSeen === 0 ? { reviewed: false, warning: `The layout of ${layout} was not reviewed: the reviewer could not view the pages. Tell the person, and do not report it as free of defects.` } : { reviewed: true };
     return { errors, path: docPath(dir, doc), pages, ...unseen, defects: { high: by('high'), medium: by('medium'), low: by('low') }, byCause: { template: data.defects.filter((d) => d.cause === 'template').length, content: data.defects.filter((d) => d.cause === 'content').length } };
   }
-  return { errors: [`Unknown or missing --doc "${doc ?? ''}". Valid: suggestions, discussion, sketches, tiles, review-fidelity, review-critic, review-eye, ${docsFor(session).map((d) => `layout-${d}`).join(', ')}`] };
+  return { errors: [`Unknown or missing --doc "${doc ?? ''}". Valid: suggestions, discussion, sketches, review-fidelity, review-critic, ${docsFor(session).map((d) => `layout-${d}`).join(', ')}`] };
 }
 
 // The session is finished when every document exists as printed and every reviewer has had a turn.
@@ -408,8 +320,7 @@ export function closeSession(ctx, root, { force = false } = {}) {
   const open = docsFor(session).flatMap((d) => (s.layouts[d]?.defects ?? []).filter((x) => x.severity === 'high').map((x) => `${d}, page ${x.page}: ${x.what}`));
   const notReviewed = docsFor(session).filter((d) => s.pdf[d] && (!s.layouts[d] || s.layouts[d].pagesSeen === 0));
   const site = file(dir, path.join('site', 'index.html'));
-  const studio = isStudio(session) ? { tiles: (s.tiles?.tiles ?? []).map((t) => file(dir, t.file)), handoff: s.model.survivors.map((i) => file(dir, path.join('handoff', `${i.id}.md`))).filter((f) => fs.existsSync(f)), tilesNotLookedAt: (s.tiles?.tiles ?? []).length > 0 && !s.reviews.eye } : {};
-  return { errors, documents: Object.fromEntries(docsFor(session).map((d) => [d, s.pdf[d] ?? file(dir, `${d}.html`)])), ...studio, site: fs.existsSync(site) ? site : null, highLayoutDefects: open, layoutNotReviewed: notReviewed, skipped: waiting.map((t) => t.role) };
+  return { errors, documents: Object.fromEntries(docsFor(session).map((d) => [d, s.pdf[d] ?? file(dir, `${d}.html`)])), site: fs.existsSync(site) ? site : null, highLayoutDefects: open, layoutNotReviewed: notReviewed, skipped: waiting.map((t) => t.role) };
 }
 
 // ---- What each writer and reviewer is given ----
@@ -421,7 +332,7 @@ const statementView = (s) => {
 const ideaView = (i) => ({
   thread: i.thread, id: i.id, title: i.title, originalTitle: i.originalTitle, proposedBy: i.proposerRole, verdict: i.verdict, strength: i.strength, effort: i.effort,
   scale: i.scale, novelty: i.novelty, ...(i.where.length ? { where: i.where } : {}), ...(i.uncovered ? { uncovered: i.uncovered } : {}),
-  ...(i.priorArt ? { priorArt: i.priorArt } : {}), ...(i.bet ? { bet: i.bet } : {}), ...(i.invention ? { invention: i.invention } : {}), ...(i.direction ? { direction: i.direction } : {}),
+  ...(i.priorArt ? { priorArt: i.priorArt } : {}), ...(i.bet ? { bet: i.bet } : {}), ...(i.invention ? { invention: i.invention } : {}),
   hypothesis: i.hypothesis, ...(i.verdict === 'narrowed' ? { asFirstProposed: i.originalHypothesis } : {}), test: i.test, ruling: i.ruling,
   ...(i.closed ? { howTheDebateEnded: i.closed.reason } : {}), ...(i.alsoCovers.length ? { alsoCovers: i.alsoCovers } : {}),
   statements: i.statements.map(statementView), evidence: i.evidence,
@@ -467,41 +378,10 @@ export function docTurn(ctx, role, root) {
       site: m.session.url,
       ...(isFramed(session) ? { frame: loadFrame(dir) } : {}),
     };
-    if (isStudio(session)) extra.push(`- What the studio understood about the site and the business (the anatomy; a direction's "buildsOn" ids point into it): ${anatomyPath(dir)}`, `- How sites of this trade work, and the most distinctive of them (the sector): ${genrePath(dir)}`, ...(has(dir, 'currents.json') ? [`- What wins awards now, and the sites that were looked at: ${currentsPath(dir)}`] : []), ...(has(dir, 'slop.json') ? [`- What a template or machine-made site looks like: ${slopPath(dir)}`] : []));
-    else if (isLab(session)) extra.push(`- What the lab understood about the thing (the anatomy; an invention's "buildsOn" ids point into it): ${anatomyPath(dir)}`, `- What things of its kind already have, and the most inventive of them (the genre): ${genrePath(dir)}`);
+    if (isLab(session)) extra.push(`- What the lab understood about the thing (the anatomy; an invention's "buildsOn" ids point into it): ${anatomyPath(dir)}`, `- What things of its kind already have, and the most inventive of them (the genre): ${genrePath(dir)}`);
     if (s.suggestions) extra.push(`- The ${mainDoc(session)} as they stand, to revise: ${docPath(dir, 'suggestions')}`);
     for (const d of [mainDoc(session), 'brief']) if (s.layouts[d]?.defects.some((x) => x.cause === 'content')) extra.push(`- The layout review of the ${d === 'brief' ? 'decision brief (built from your text)' : 'suggestions'}, whose "content" defects you fix (a text too long for its place, a broken character): ${docPath(dir, `layout-${d}`)}`);
     return { prompts: ['writer.md'], input: { name: 'suggestions-model', data: input }, extra, cmd: cmd('suggestions'), shape: '{ "summary": "…", "plan": [ { "text": "…", "ideas": ["I21"] } ], "survivors": [ { "idea": "I21", … } ], "killed": [ { "idea": "I5", … } ], "bets": [ … ], "questions": [ { "refs": [41], "text": "…" } ] }', okLine: 'suggestions: ok, 8 survivors', badLine: 'suggestions: invalid — <first error>' };
-  }
-  if (role === 'prototyper') {
-    const anatomy = loadAnatomy(dir)?.anatomy;
-    const names = new Map([...(anatomy?.material ?? []).map((x) => [x.id, x.what]), ...(anatomy?.parts ?? []).map((x) => [x.id, x.name]), ...(anatomy?.knows ?? []).map((x) => [x.id, x.what]), ...(anatomy?.unused ?? []).map((x) => [x.id, x.what])]);
-    const pictures = loadParts(dir)?.places ?? [];
-    const asks = s.docs.tilesRevised ? [] : eyeAsks(s.reviews.eye);
-    const input = {
-      site: { kind: session.object?.kind ?? 'website', what: anatomy?.what ?? null, address: session.url ?? null }, brand: m.brand,
-      slop: loadSlop(dir)?.slop?.tells ?? [],
-      rules: loadKnowledge(root).notes.filter((n) => ['forbidden', 'constraint', 'preference'].includes(n.kind)).map((n) => ({ kind: n.kind, title: n.title, detail: n.detail })),
-      survivors: m.survivors.map((i) => ({
-        idea: i.id, title: i.title, change: i.hypothesis.change, effect: i.hypothesis.effect, because: i.hypothesis.because,
-        design: i.direction?.design ?? null, madeFrom: i.direction?.ruled?.madeFrom ?? i.direction?.madeFrom ?? null,
-        // The judge's ruling on the signature moment is the brief: "quieter" and "drop" are followed.
-        signatureRuling: i.direction?.ruled?.signature ?? null,
-        experience: i.invention?.experience ?? [], buildsOn: (i.invention?.buildsOn ?? []).map((id) => ({ id, is: names.get(id) ?? null })),
-        pictures: pictures.filter((x) => x.thread === i.thread && x.file).map((x) => path.join(dir, x.file)),
-        ...(asks.includes(i.id) ? { stranger: (s.reviews.eye.tiles ?? []).find((t) => t.idea === i.id) } : {}),
-      })),
-      ...(asks.length ? { revise: asks } : {}),
-    };
-    if (s.tiles) extra.push(`- The tiles as they stand, to revise (the record, and each page under tiles/): ${tilesPath(dir)}`);
-    const page = `node "${scriptOf(session)}" tile --root "${root}" --session ${session.id} --idea I21`;
-    extra.push('', '**Handing in a page.** Hand in each page on its own, as plain HTML on standard input, before you save the tiles (a page inside a JSON string is escaped twice, and that is where a script gets broken):', '', '```bash', `${page} <<'TILE_HTML'`, '<!doctype html>', '<html lang="en">', '…the whole page…', '</html>', 'TILE_HTML', '```', '', `In PowerShell: \`@'<newline>…the page…<newline>'@ | ${page}\`. It prints \`"ok": true\`, or the reasons the page is refused: fix them and hand it in again. Some shells turn a doubled backslash into a single one on the way: write the page without one (a regular expression class such as [0-9] instead of an escaped backslash). Then save the tiles below **without** "html": the script takes each page from what you handed in.`);
-    if (asks.length) extra.push(`- What the stranger saw in each tile, to answer in the tiles named under "revise": ${docPath(dir, 'review-eye')}`);
-    return { prompts: ['prototyper.md'], input: { name: 'tiles', data: input }, extra, cmd: cmd('tiles'), shape: '{ "tiles": [ { "idea": "I21", "caption": "…", "shows": "…", "tokens": { "colours": [ { "name": "…", "value": "#1a1a1a", "use": "…" } ], "type": [ { "role": "…", "family": "…", "source": "…", "use": "…" } ], "motion": [ { "name": "…", "duration": "…", "easing": "…", "use": "…" } ], "rules": ["…", "…", "…"] } } ] }', okLine: 'tiles: ok, 4 tiles', badLine: 'tiles: invalid — <first error>' };
-  }
-  if (role === 'eye') {
-    const input = { sector: loadGenre(dir)?.genre?.category ?? null, slop: loadSlop(dir)?.slop?.tells?.map((t) => t.what) ?? [], tiles: s.pictured.map((t) => ({ idea: t.idea, pictures: TILE_VIEWS.map((v) => file(dir, tilePicture(t.idea, v))).filter((f) => fs.existsSync(f)) })) };
-    return { prompts: ['eye.md'], input: { name: 'eye', data: input }, extra: ['- Look only at the pictures your material names. Do not open the tiles\' pages, the directions or anything else in the session folder: you are the one reader who was told nothing.'], cmd: cmd('review-eye'), shape: '{ "verdict": "…", "tiles": [ { "idea": "I21", "guess": "…", "swap": "own", "remindsOf": "…", "tells": ["…"], "works": "…", "issues": [ { "severity": "medium", "what": "…" } ] } ] }', okLine: 'stranger: ok, 4 tiles, 1 to revise', badLine: 'stranger: invalid — <first error>' };
   }
   if (role === 'sketcher') {
     const form = sketchFormFor(session.object?.kind);

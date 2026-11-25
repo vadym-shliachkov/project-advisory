@@ -49,7 +49,7 @@ const idsOf = (list, prefix) => (list ?? []).map((x, i) => x.id ?? `${prefix}${i
 // ---- The frame ----
 
 export function validateFrame(f, kind = 'venture') {
-  if (kind === 'lab' || kind === 'studio') return validateLabFrame(f);
+  if (kind === 'lab') return validateLabFrame(f);
   if (!f || typeof f !== 'object' || Array.isArray(f)) return ['$.frame: an object is required'];
   const errors = [...textError(f.ideal, '$.frame.ideal', 30, 400)];
   if (!Array.isArray(f.contradictions) || f.contradictions.length < 2 || f.contradictions.length > 5) errors.push('$.frame.contradictions: two to five, each { "want", "butThen", "separate" }: what the business needs, what that makes worse, and how the two could be separated');
@@ -73,7 +73,7 @@ export function validateFrame(f, kind = 'venture') {
 
 // Ids are given by the script: H1… for the questions, C1… for the contradictions, P1… for the provocations.
 export function cleanFrame(f, kind = 'venture') {
-  if (kind === 'lab' || kind === 'studio') return cleanLabFrame(f);
+  if (kind === 'lab') return cleanLabFrame(f);
   return {
     ideal: one(f.ideal),
     contradictions: f.contradictions.map((c, i) => ({ id: `C${i + 1}`, want: one(c.want), butThen: one(c.butThen), separate: one(c.separate) })),

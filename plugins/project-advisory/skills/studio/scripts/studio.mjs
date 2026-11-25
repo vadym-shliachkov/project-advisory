@@ -405,7 +405,8 @@ const COMMANDS = {
       study: reuse ? { ...reuse, shown: false } : { from: null, business: [], field: [], looks: null, shown: false },
     };
     if (!s.url) {
-      const prev = reuse && readJson(path.join(studioDir(root), reuse.from, 'session.json'));
+      const prevDir = reuse && path.join(studioDir(root), reuse.from);
+      const prev = reuse && (readJson(sessionFile(prevDir)) ?? readJson(path.join(prevDir, 'session.json')));
       if (prev?.url) s.url = prev.url;
     }
     if (!reuse) s.study.looks = path.relative(root, path.join(dir, 'study', 'looks'));

@@ -1,9 +1,8 @@
 import path from 'node:path';
 import { readJson, writeJson } from './io.mjs';
-import { takeTurn, isLab, isStudio, isVenture, isFramed } from './session.mjs';
+import { takeTurn, isLab, isVenture, isFramed } from './session.mjs';
 import { UPSIDES, VENTURE_SCALES } from './frame.mjs';
 import { labRulingErrors, LAB_SCALES } from './invention.mjs';
-import { studioRulingErrors, cleanStudioRuling, STUDIO_SCALES } from './direction.mjs';
 import { kindOf } from './paths.mjs';
 import { thread, inThread, testErrors, whereErrors, cleanWhere, SCALES } from './record.mjs';
 import { applyIdeas } from './ideas.mjs';
@@ -84,7 +83,7 @@ function rulingErrors(r, at, ctx) {
       // The smaller idea is the one that will be tested, so it may carry the test and the kill condition that read it.
       if (r.narrowed.killCondition !== undefined) errors.push(...textError(r.narrowed.killCondition, `${at}.narrowed.killCondition`, 10, 400));
       // A direction narrowed to its first page is an addition or an adjustment now; the documents say how far it reaches.
-      const scales = isStudio(ctx.session) ? STUDIO_SCALES : isLab(ctx.session) ? LAB_SCALES : SCALES;
+      const scales = isLab(ctx.session) ? LAB_SCALES : SCALES;
       if (r.narrowed.scale !== undefined && !scales.includes(r.narrowed.scale)) errors.push(`${at}.narrowed.scale: ${scales.join(', ')}`);
       // A smaller form that moved to another page, or to one part of it, says where it is now; otherwise it keeps the
       // places of the idea as proposed.
@@ -101,8 +100,7 @@ function rulingErrors(r, at, ctx) {
     errors.push(...textError(r.riskiest, `${at}.riskiest`, 10, 300).map((e) => `${e}: the assumption most likely to be false, after the debate, in words for the reader`), ...readerErrors(r.riskiest, `${at}.riskiest`));
     if (isVenture(ctx.session) && r.verdict === 'narrowed' && r.narrowed?.scale !== undefined && !VENTURE_SCALES.includes(r.narrowed.scale)) errors.push(`${at}.narrowed.scale: a bet stays new or a direction; the venture board does not narrow a bet into an edit of the site`);
   }
-  if (isStudio(ctx.session)) errors.push(...studioRulingErrors(r, at), ...(r.whole ? readerErrors(r.whole, `${at}.whole`) : []));
-  else if (isLab(ctx.session)) errors.push(...labRulingErrors(r, at));
+  if (isLab(ctx.session)) errors.push(...labRulingErrors(r, at));
   // A bet that fell, or was cut down, for reaching further than the council can test is worth the venture board's time.
   if (r.ventureCandidate !== undefined) {
     if (isFramed(ctx.session)) errors.push(`${at}.ventureCandidate: only the council hands bets to the venture board`);
@@ -136,8 +134,6 @@ const clean = (r) => ({
   ...(r.ventureCandidate && r.verdict !== 'survived' ? { ventureCandidate: true } : {}),
   ...(r.upside ? { upside: r.upside } : {}), ...(r.riskiest ? { riskiest: one(r.riskiest) } : {}),
   ...(r.newTo ? { newTo: r.newTo } : {}), ...(r.feasible && r.verdict !== 'killed' && r.verdict !== 'undecided' ? { feasible: r.feasible } : {}),
-  // The studio's rulings: the swap test, what the direction is made from, and what becomes of its signature moment.
-  ...cleanStudioRuling(r),
 });
 
 function addToRecord(record, entry) {
@@ -283,7 +279,7 @@ export function finalise(ctx, { ideas, date } = {}) {
     r.narrowed = { ...r.narrowed, ...(child.test ? { test: child.test } : {}), killCondition: child.hypothesis.killCondition };
   });
 
-  const verdict = (r) => ({ session: session.id, ...(r.strength ? { strength: r.strength, vsDoNothing: r.vsDoNothing } : {}), ...(r.upside ? { upside: r.upside } : {}), ...(r.riskiest ? { riskiest: r.riskiest } : {}), ...(r.newTo ? { newTo: r.newTo } : {}), ...(r.feasible ? { feasible: r.feasible } : {}), ...(r.swap ? { swap: r.swap } : {}), ...(r.madeFrom ? { madeFrom: r.madeFrom } : {}), ...(r.signature ? { signature: r.signature } : {}) });
+  const verdict = (r) => ({ session: session.id, ...(r.strength ? { strength: r.strength, vsDoNothing: r.vsDoNothing } : {}), ...(r.upside ? { upside: r.upside } : {}), ...(r.riskiest ? { riskiest: r.riskiest } : {}), ...(r.newTo ? { newTo: r.newTo } : {}), ...(r.feasible ? { feasible: r.feasible } : {}) });
   const moves = verdicts.rulings.flatMap((r) => {
     const id = ideaOf(r.thread);
     if (r.verdict === 'survived') return [{ id, status: 'survived', verdict: verdict(r) }];

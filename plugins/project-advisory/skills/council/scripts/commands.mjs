@@ -4,21 +4,20 @@ import { parseLooseJson } from './lib/io.mjs';
 import { loadFacts, saveFacts, putFact } from './lib/bank.mjs';
 import { loadIdeas, saveIdeas, applyIdeas, ideasPath, trackRecord, setAside } from './lib/ideas.mjs';
 import { digest as bankDigest } from './lib/digest.mjs';
-import { createSession, resolveSession, loadSession, saveSession, budgetOf, budgetWarning, spendRun, recast, takeTurn, DEFAULT_GOAL, isLab, isStudio, isFramed } from './lib/session.mjs';
+import { createSession, resolveSession, loadSession, saveSession, budgetOf, budgetWarning, spendRun, recast, takeTurn, DEFAULT_GOAL, isLab, isFramed } from './lib/session.mjs';
 import { buildContext, taskLine } from './lib/context.mjs';
 import { dueForCheck } from './lib/ideas.mjs';
-import { docTurns, docNextStep, advanceDocs, renderDocs, saveDocument, saveTilePage, closeSession, takePictures } from './lib/flow.mjs';
+import { docTurns, docNextStep, advanceDocs, renderDocs, saveDocument, closeSession, takePictures } from './lib/flow.mjs';
 import { brandOf } from './lib/documents.mjs';
 import { loadEvidence, saveEvidence, collectEvidence, addEvidence, evidencePath } from './lib/evidence.mjs';
 import { loadRecord, saveRecord, say as saySaved, saveDocket, advance, turns, nextStep, openThreads } from './lib/record.mjs';
-import { findBrowser, screenshot, dumpUrl, VIEWS, lookSlug } from './lib/browser.mjs';
+import { findBrowser, screenshot, VIEWS, lookSlug } from './lib/browser.mjs';
 import { saveFrame, loadFrame, validateFrame, cleanFrame, validateProvocations, cleanProvocations, pickErrors } from './lib/frame.mjs';
 import { KINDS, kindOf as kindOfSession, labelOf } from './lib/paths.mjs';
 import { migrateVenture } from './lib/migrate.mjs';
 import { detectObject, gitHead, OBJECT_KINDS, OBJECT_WORDS } from './lib/object.mjs';
 import { loadAnatomy, saveAnatomy, validateAnatomy, cleanAnatomy, anatomyView, loadGenre, saveGenre, validateGenre, cleanGenre } from './lib/anatomy.mjs';
-import { saveGroundwork, parseRefresh, cachedLook, cacheLook, loadGroundwork, recordKind } from './lib/groundwork.mjs';
-import { loadCurrents, saveCurrents, validateCurrents, cleanCurrents, loadSlop, saveSlop, validateSlop, cleanSlop, detectTech, SHARE_WORDS } from './lib/field.mjs';
+import { saveGroundwork, parseRefresh, cachedLook, cacheLook, loadGroundwork } from './lib/groundwork.mjs';
 import { addNote, retireNote, listNotes, NOTE_KINDS } from './lib/notes.mjs';
 import { validatePrimer, cleanPrimer } from './lib/primer.mjs';
 import { loadVerdicts, saveVerdicts, saveRulings, saveSetNotes, saveSetChanges, survivors, VERDICTS } from './lib/verdict.mjs';
@@ -101,12 +100,9 @@ export function init(o) {
   // The lab works on a thing of a kind: the person may name it, otherwise it is guessed from the project and the
   // anatomist confirms or corrects it.
   if (o.object !== undefined && !OBJECT_KINDS.includes(o.object)) throw new Error(`Unknown --object "${o.object}". The kinds: ${OBJECT_KINDS.join(', ')}`);
-  const studies = ['lab', 'studio'].includes(kind);
-  if (!studies && (o.object !== undefined || o.focus !== undefined)) throw new Error('--object and --focus are for the invention lab and the design studio');
-  const detected = studies ? detectObject(root, { url: o.url }) : null;
-  // The studio designs a site: a project that does not say what it is (a new site, with nothing built yet) is one.
-  const guess = kind === 'studio' && detected.kind === 'other' ? { kind: 'website', confidence: 'high', signals: ['the studio designs a site, and nothing in the project says otherwise'] } : detected;
-  const object = guess ? (o.object ? { kind: o.object, from: 'person' } : { kind: guess.kind, from: 'detected', confidence: guess.confidence, signals: guess.signals }) : null;
+  if (kind !== 'lab' && (o.object !== undefined || o.focus !== undefined)) throw new Error('--object and --focus are for the invention lab');
+  const detected = kind === 'lab' ? detectObject(root, { url: o.url }) : null;
+  const object = detected ? (o.object ? { kind: o.object, from: 'person' } : { kind: detected.kind, from: 'detected', confidence: detected.confidence, signals: detected.signals }) : null;
   const { dir, session } = createSession(root, { goal: o.goal, url: o.url, data: o.data, budget: o.budget, kind, object, focus: o.focus });
   // A goal the person gives is remembered: next week's session starts from it without being told again.
   if (session.goalSource === 'given') saveFacts(root, putFact(loadFacts(root), { key: `${kind}.goal`, value: session.goal, source: 'human', confidence: 'high', by: 'human' }).facts);
@@ -114,11 +110,8 @@ export function init(o) {
   // With nothing better, the documents would carry the folder's name as the business's.
   const brand = brandOf(root);
   const unnamed = brand.nameFrom === 'folder' ? `The documents would name the business "${brand.name}", after the project folder. Ask the person for the business's name and save it with "fact --key brand.name --value <name>".` : null;
-  const unsure = kind === 'lab' && object?.from === 'detected' && object.confidence === 'low' ? `The lab guessed this project is ${OBJECT_WORDS[object.kind]} (${object.signals.at(-1)}), without much to go on. Ask the person what it is; to name it, set this session aside and run "init" again with --object (${OBJECT_KINDS.join(', ')}).` : null;
-  // The studio leans on a browser more than its siblings: it measures what sites are built with, photographs the
-  // tiles, and nobody can look at a tile that was not photographed.
-  const blind = kind === 'studio' && !findBrowser() ? 'No Chrome, Edge or Chromium was found. The session can run, but what honoured sites are built with will be read and not measured, the tiles will not be photographed, nobody will look at them as a stranger would, and the documents will be HTML. Tell the person now; installing one of them, or setting CHROME_PATH, before going on gives the session all of it.' : null;
-  const warnings = [short, unnamed, unsure, blind].filter(Boolean);
+  const unsure = object?.from === 'detected' && object.confidence === 'low' ? `The lab guessed this project is ${OBJECT_WORDS[object.kind]} (${object.signals.at(-1)}), without much to go on. Ask the person what it is; to name it, set this session aside and run "init" again with --object (${OBJECT_KINDS.join(', ')}).` : null;
+  const warnings = [short, unnamed, unsure].filter(Boolean);
   return { ok: true, goalSource: session.goalSource, healthRun: session.run, url: session.url, data: session.data, business: { name: brand.name, from: brand.nameFrom }, ...(warnings.length ? { warnings } : {}), ...view({ root, dir, session, record: loadRecord(dir), evidence: loadEvidence(dir), verdicts: loadVerdicts(dir) }) };
 }
 
@@ -133,7 +126,7 @@ export function next(o) {
     const moved = advanceDocs(ctx, ctx.root, { force: Boolean(o.force) });
     if (moved.errors.length) return { ok: false, errors: moved.errors, ...view(ctx) };
     persist(ctx);
-    return { ok: true, from: moved.from, to: moved.to, documents: moved.documents, ...(moved.site ? { site: moved.site } : {}), ...(moved.handoff ? { handoff: moved.handoff } : {}), warnings: moved.warnings, ...view(ctx) };
+    return { ok: true, from: moved.from, to: moved.to, documents: moved.documents, ...(moved.site ? { site: moved.site } : {}), warnings: moved.warnings, ...view(ctx) };
   }
   const { errors, from, to, closed, ideas } = advance(ctx, { force: Boolean(o.force), ideas: loadIdeas(ctx.root) });
   if (errors.length) return { ok: false, errors, ...view(ctx) };
@@ -157,15 +150,12 @@ export function evidence(o, { stdin = readStdin } = {}) {
     session.reused = collected.reused.map((r) => r.kind);
     // A reused anatomy or genre is what this session studies from, as if its own turn had written it.
     if (session.reused.includes('anatomy')) {
-      const record = loadGroundwork(root, recordKind(session, 'anatomy'));
+      const record = loadGroundwork(root, 'anatomy');
       saveAnatomy(dir, { ...record.anatomy, reusedFrom: record.at });
       session.study = { anatomy: record.at, reused: true };
       if (record.anatomy?.anatomy?.kind) session.object = { ...(session.object ?? {}), kind: record.anatomy.anatomy.kind, from: 'anatomist' };
     }
-    if (session.reused.includes('genre')) { const record = loadGroundwork(root, recordKind(session, 'genre')); saveGenre(dir, { genre: record.genre, reusedFrom: record.at }); }
-    // The studio's look at the field: what wins awards now, and what template sites look like.
-    if (session.reused.includes('awards')) { const record = loadGroundwork(root, 'awards'); saveCurrents(dir, { currents: record.currents, reusedFrom: record.at }); }
-    if (session.reused.includes('slop')) { const record = loadGroundwork(root, 'slop'); saveSlop(dir, { slop: record.slop, reusedFrom: record.at }); }
+    if (session.reused.includes('genre')) saveGenre(dir, { genre: loadGroundwork(root, 'genre').genre, reusedFrom: loadGroundwork(root, 'genre').at });
     session.refresh = refresh;
     saveSession(dir, session);
     return { ok: true, path: evidencePath(dir), entries: collected.entries.length, dataFiles: collected.data.length, site: collected.site, missing: collected.missing, reused: collected.reused.map(({ kind, at, from, entries }) => ({ kind, at, from, entries })) };
@@ -243,12 +233,7 @@ export function study(o, { stdin = readStdin } = {}) {
   if (o.show) {
     if (!current?.anatomy) return fail('The anatomy has not been written yet: the anatomist writes it in the evidence phase.');
     const genre = loadGenre(dir)?.genre;
-    // The studio also shows what it found in the field: the reading of what wins awards now, with how common each
-    // pattern has become, and what a template site looks like. The person may know their trade's sites better.
-    const currents = isStudio(session) ? loadCurrents(dir)?.currents : null;
-    const slop = isStudio(session) ? loadSlop(dir)?.slop : null;
-    const field = { ...(currents ? { awardsNow: { reading: currents.reading, sites: currents.sample.length, patterns: currents.patterns.map((p) => `${p.what} (${p.kind}; ${p.share})`), shares: SHARE_WORDS } } : {}), ...(slop ? { slop: { reading: slop.reading, tells: slop.tells.map((t) => t.what) } } : {}) };
-    return { ok: true, ...anatomyView(current), ...(genre ? { genre: { category: genre.category, standardKit: genre.kit.map((k) => k.text) } } : {}), ...field, ...(session.focus ? { focus: session.focus } : {}), note: `Show the person this, as it is, and ask what is wrong or missing. Each correction goes to the anatomist, who revises the anatomy before anyone ${isStudio(session) ? 'designs' : 'invents'}.` };
+    return { ok: true, ...anatomyView(current), ...(genre ? { genre: { category: genre.category, standardKit: genre.kit.map((k) => k.text) } } : {}), ...(session.focus ? { focus: session.focus } : {}), note: 'Show the person this, as it is, and ask what is wrong or missing. Each correction goes to the anatomist, who revises the anatomy before anyone invents.' };
   }
   if (o.correct !== undefined) {
     if (session.phase !== 'study') return fail(`Corrections are made at the study, after the anatomy is written and before the frame; the session is in the ${session.phase} phase`);
@@ -261,19 +246,15 @@ export function study(o, { stdin = readStdin } = {}) {
     saveSession(dir, session);
     return { ok: true, corrections: (current.corrections?.length ?? 0) + 1, next: 'Start the anatomist, to revise the anatomy, once the person has said everything.' };
   }
-  const { data, error } = readJsonInput(stdin, `the ${({ genre: 'genre', awards: 'currents', slop: 'slop' })[o.role] ?? 'anatomy'}`);
+  const { data, error } = readJsonInput(stdin, `the ${o.role === 'genre' ? 'genre' : 'anatomy'}`);
   if (error) return error;
   const items = Array.isArray(data.evidence) ? data.evidence : null;
   if (o.role === 'anatomist') {
     const revising = session.phase === 'study' && session.study?.pending;
     if (session.phase !== 'evidence' && !revising) return fail(`The anatomy is written in the evidence phase, and revised at the study when the person corrects it; the session is in the ${session.phase} phase`);
     const errors = validateAnatomy(data.anatomy);
-    // A direction grows from what the business has: with nothing named, every direction would fit any business.
-    if (isStudio(session) && !errors.length && (data.anatomy.material?.length ?? 0) < 2) errors.push('$.anatomy.material: at least two things the business has that a design could be made of (its work, its product, its place, its people, its archive, its data, its words), each { "what", "where" }');
-    // A site that does not exist yet is studied from what the person said about the business: one source is enough.
-    const least = isStudio(session) && !session.url ? 1 : 3;
     if (!items) errors.push('$.evidence: what the anatomy rests on, each { "grade": "observed", "source": "<a file in the project or a page address>", "text" }');
-    else if (!revising && items.length < least) errors.push(`$.evidence: at least ${least === 1 ? 'one file, page or fact' : 'three files or pages'} it rests on: an anatomy that rests on nothing is a guess`);
+    else if (!revising && items.length < 3) errors.push('$.evidence: at least three files or pages it rests on: an anatomy that rests on nothing is a guess');
     if (errors.length) { refused(ctx, 'anatomist', 'study', errors); return fail(...errors); }
     const { evidence: updated, errors: evErrors, warnings } = addEvidence(ctx.evidence, items, { by: 'anatomist', root, session });
     if (evErrors.length) { refused(ctx, 'anatomist', 'study', evErrors); return { ok: false, errors: evErrors, warnings }; }
@@ -305,34 +286,6 @@ export function study(o, { stdin = readStdin } = {}) {
     saveSession(dir, session);
     saveGroundwork(root, 'genre', { session, entries: updated.entries.filter((e) => e.by === 'genre' && !e.reusedFrom), genre });
     return { ok: true, kit: genre.kit.length, frontier: genre.frontier.length, warnings };
-  }
-  // The studio's two looks at the field, each with the pages it rests on.
-  if (['awards', 'slop'].includes(o.role)) {
-    if (!isStudio(session)) return fail('Only the design studio looks at what wins awards and at what template sites look like.');
-    if (session.phase !== 'evidence') return fail(`The field is looked at in the evidence phase; the session is in the ${session.phase} phase`);
-    const awards = o.role === 'awards';
-    const errors = awards ? validateCurrents(data.currents) : validateSlop(data.slop);
-    const least = awards ? 6 : 3;
-    if (!items || items.length < least) errors.push(`$.evidence: at least ${least} pages it rests on, each { "grade": "observed", "source": "https://…", "date", "text" }`);
-    if (errors.length) { refused(ctx, o.role, 'study', errors); return fail(...errors); }
-    const { evidence: updated, errors: evErrors, warnings } = addEvidence(ctx.evidence, items, { by: o.role, root, session });
-    if (evErrors.length) { refused(ctx, o.role, 'study', evErrors); return { ok: false, errors: evErrors, warnings }; }
-    saveEvidence(dir, updated);
-    const entries = updated.entries.filter((e) => e.by === o.role && !e.reusedFrom);
-    if (awards) {
-      const currents = cleanCurrents(data.currents);
-      saveCurrents(dir, { currents, savedAt: new Date().toISOString() });
-      saveGroundwork(root, 'awards', { session, entries, currents });
-      takeTurn(session, 'awards');
-      saveSession(dir, session);
-      return { ok: true, sites: currents.sample.length, patterns: currents.patterns.length, warnings };
-    }
-    const slop = cleanSlop(data.slop);
-    saveSlop(dir, { slop, savedAt: new Date().toISOString() });
-    saveGroundwork(root, 'slop', { session, entries, slop });
-    takeTurn(session, 'slop');
-    saveSession(dir, session);
-    return { ok: true, tells: slop.tells.length, warnings };
   }
   throw new Error('Usage: study --role anatomist | --role genre (JSON on standard input), --show, or --correct "<what the person said>"');
 }
@@ -414,16 +367,6 @@ export function save(o, { stdin = readStdin } = {}) {
   return { ok: true, doc: o.doc, ...rest };
 }
 
-// One page of a tile of the design studio, as plain HTML on standard input: it is checked and kept until the tiles are
-// saved. A page is code; sent on its own it is escaped once, not three times.
-export function tile(o, { stdin = readStdin } = {}) {
-  const ctx = sessionCtx(o);
-  if (!o.idea) throw new Error('Usage: tile --idea I21 (the whole page, as HTML, on standard input)');
-  const { errors, ...rest } = saveTilePage(ctx, ctx.root, o.idea, stdin());
-  if (errors.length) { refused(ctx, 'prototyper', 'tile', errors); return { ok: false, idea: o.idea, errors }; }
-  return { ok: true, idea: o.idea, ...rest, next: 'When every page is handed in, save the tiles (their captions, what each shows and their values) without "html".' };
-}
-
 // Photographs the part of each page the ideas apply to, once the verdicts are final, for the documents.
 export async function shots(o) {
   const ctx = sessionCtx(o);
@@ -437,10 +380,10 @@ export async function shots(o) {
 export function render(o) {
   const ctx = sessionCtx(o);
   if (!['write', 'review', 'done'].includes(ctx.session.phase)) return { ok: false, errors: [`The documents are made after the verdicts are final; the session is in the ${ctx.session.phase} phase`], warnings: [] };
-  const { errors, warnings, documents, site, handoff, rendered } = renderDocs(ctx, ctx.root, { only: o.doc ?? null, html: Boolean(o.html) });
+  const { errors, warnings, documents, site, rendered } = renderDocs(ctx, ctx.root, { only: o.doc ?? null, html: Boolean(o.html) });
   if (errors.length) return { ok: false, errors, warnings };
   saveSession(ctx.dir, ctx.session);
-  return { ok: true, documents, ...(site ? { site } : {}), ...(handoff ? { handoff } : {}), rendered, warnings };
+  return { ok: true, documents, ...(site ? { site } : {}), rendered, warnings };
 }
 
 export function close(o) {
@@ -527,20 +470,6 @@ export function look(o) {
   return { ok: true, url: o.url, shots, failed, note: 'Open each file with your file reader to see it. "desktop" is the first screen on a computer; "narrow" is the first screen at 500 pixels wide, the narrowest this browser lays out, which most sites show as their phone layout (a phone is narrower still, so do not judge text that is cut off at the edge); "desktop-long" goes further down the page. To cite what you saw, add it to the evidence with this address as its source.' };
 }
 
-// What a public page is built with, read from its markup after its scripts ran: the libraries, frameworks and fonts it
-// shows, how many canvases and films it has, and whether it answers a visitor who asked for less motion. For the design
-// studio's scouts: the technology of a site is measured where it can be, not remembered.
-export function probe(o) {
-  if (!o.url) throw new Error('Usage: probe --url https://example.com/');
-  checkUrl(o.url);
-  sessionCtx(o);
-  const browser = findBrowser();
-  if (!browser) return { ok: false, errors: ['No Chrome, Edge or Chromium was found, so a page cannot be probed here. Read the page and its credits instead, and say in your evidence that its technology was read, not measured.'], warnings: [] };
-  let html;
-  try { html = dumpUrl(browser, o.url); } catch (e) { return { ok: false, errors: [String(e.message).trim()], warnings: [] }; }
-  return { ok: true, url: o.url, ...detectTech(html), note: 'Read from the page\'s markup after its scripts ran. A library bundled into the site\'s own code without a trace is not seen: an empty list means "nothing shown", not "nothing used". To cite it, add it to the evidence with this address as its source.' };
-}
-
 // ---- The knowledge bank ----
 
 // Saves ideas into the ledger: a new idea gets the next id, and a change of status must be a move the ledger allows.
@@ -589,4 +518,4 @@ export function digest(o) {
   return bankDigest(rootOf(o));
 }
 
-export const COMMANDS = { init, status, next, cast, evidence, primer, study, frame, context, say, look, probe, verdict, save, tile, shots, render, close, ideas, fact, note, digest };
+export const COMMANDS = { init, status, next, cast, evidence, primer, study, frame, context, say, look, verdict, save, shots, render, close, ideas, fact, note, digest };
