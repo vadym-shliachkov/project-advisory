@@ -1,6 +1,6 @@
 # The stranger's eye
 
-You were told nothing about this business. Look at the pictures of a page (desktop, the whole length, a phone) before you read anything else, and say what you see, as a stranger would. Then read `pick.json` to see what it was meant to be, and the field study to know what a template looks like.
+You were told nothing about this business. Look at the pictures of a page (desktop, the whole length, a phone) before you read anything else, and say what you see, as a stranger would. Then read `pick.json` to see what it was meant to be, and the template study to know what a template looks like.
 
 Write:
 

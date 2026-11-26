@@ -162,17 +162,18 @@ Each session ends with a decision brief, the inventions (each with a sketch of w
 ## Design studio
 
 ```text
-/project-advisory:studio [path] [--url <https://…>] [--focus "<part>"] [--goal "<text>"] [--reuse latest|<session>|none]
+/project-advisory:studio [path] [--url <https://…>] [--focus "<part>"] [--goal "<text>"] [--reuse latest|<session>|none] [--fresh all|craft,awards,…]
 ```
 
-Comes back with **one new design concept** for a site, existing or not built yet, and **one working page that shows it**. A concept is the idea behind the site, the visual world that carries it and the motion that gives it feeling. Corrections such as larger type or more white space are not design, and the studio refuses them as concepts.
+Comes back with **one new design concept** for a site, existing or not built yet, and **one working page that shows it**. A concept is the idea behind the site, the visual world that carries it and the motion that gives it feeling. Corrections such as larger type or more white space are not design, and the studio refuses them as concepts. Behind the page runs a full studio; its whole record stays in the session folder and is written as a document and a PDF only when asked (`render`).
 
-1. **Study.** A business scout writes what the business is as raw material for a designer: its world, what it has that no other has, what visitors must feel. A field scout looks at what wins awards now, how sites of the trade look and what a template looks like, with pictures. A study an earlier session left in the last 30 days is reused.
-2. **Concepts.** Six seats each propose two concepts, starting from different places: one idea, the business's own material, the feeling, fields far from the web, motion, provocation. They are not shown other sites, so nothing can be copied. A concept that is a rule about type size or weight, or whose motion is "nothing moves", is refused by the script.
-3. **Critique.** A critic who has seen the field and the visitor's voice comment once on every concept: copy, template, collection of effects, type-only, does it make people feel something.
-4. **Pick.** A judge picks one concept and works it out: the story as a visitor moves down the page, palette, type, forms, imagery, a choreography of three to seven movements with durations and easing, the signature moment, the inner pages, the voice. Every other concept gets a line on why it was not chosen.
-5. **Build.** A builder makes one page that opens as the new site's first screen, live and moving, then shows the idea, the story, the world, each movement (replayable), inner pages on desktop and phone, and the site before and after. It may load fonts and GSAP, Three.js or similar from the usual CDNs, and the business's own pictures from the project; nothing else leaves the page.
-6. **Look.** A stranger who was told nothing looks at pictures of the page and says what business it seems for and what it makes them feel; the builder revises once when asked.
+1. **Study.** Six scouts: the business (its world and what it has that no other has), what customers say and feel, what wins awards now (twelve to twenty honoured sites, photographed, measured with a probe of their libraries, frameworks and fonts, and written up as patterns with how common each has become), how sites of the trade look, what a template looks like now, and what the web can newly do for motion, space and type. Each study is reused while fresh (two weeks to a month); `--fresh` studies again.
+2. **Frame and provocations.** A framer sets the problem: the ideal result, contradictions, a morphological box, the line of evolution and "how might we" questions. A provocateur writes absurd statements to be mined. The person may pick the framings that matter.
+3. **Concepts.** Six seats each start from a different place (one idea, the business's own material, the feeling, far fields, motion, provocation), are dealt two framings and three idea cards, and propose two concepts each, then search for the nearest thing that exists. They are not shown other sites, so nothing can be copied. A concept that is a rule about type size or weight, or whose motion is "nothing moves", is refused by the script.
+4. **Take further.** Another seat makes every concept more itself before anyone attacks it.
+5. **Debate.** A critic who has seen the field and the visitor's voice attack (copy, template, collection of effects, a rival's site, a text page, no feeling, not new, unbuildable) over up to three rounds; the proposers defend, narrow or concede; only what is still contested goes on.
+6. **Pick.** A judge rules on every concept and picks one, worked out in full: the story as a visitor moves down the page, palette, type, forms, imagery, a choreography of movements with durations and easing, the signature moment, the inner pages, the voice.
+7. **Build and look.** A builder makes one page that opens as the new site's first screen, live and moving, then shows the idea, the world and every movement, inner pages on desktop and phone, and the site before and after. A stranger looks at pictures of it, and the builder revises once.
 
 The session ends with `page/index.html`, its pictures, and `concept.md`, a one-page note for whoever builds the site.
 

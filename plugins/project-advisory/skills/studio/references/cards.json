@@ -1,0 +1,317 @@
+{
+  "about": "Idea cards for the design studio. Each seat is dealt three, from three different families, and answers its framings with them. A card is a forcing move: it pushes the seat away from the site anyone would make for this trade. The material cards start from what the business has; the idea cards turn what the business is into one governing idea; the constraint cards take something away; the visual cards start from light, space, material and mechanism, so what is left has to carry the design; the far fields are places outside the web to borrow from; the time cards are about movement and what it means; the voice cards make the words the design; the separation cards resolve one of the frame's contradictions. No card names a pattern of the web: a direction is not made by joining what other sites do.",
+  "cards": [
+    {
+      "id": "K1",
+      "family": "material",
+      "name": "The thing itself",
+      "prompt": "Start from the product, the work or the place (an M… item) and let it be the whole first screen, at a size or from an angle nobody shows it."
+    },
+    {
+      "id": "K2",
+      "family": "material",
+      "name": "The process",
+      "prompt": "The business does something step by step that visitors never see. Make that making the structure of the site."
+    },
+    {
+      "id": "K3",
+      "family": "material",
+      "name": "The archive",
+      "prompt": "Something the business has kept for years (drawings, ledgers, samples, letters, old labels): build the look from it, not from stock."
+    },
+    {
+      "id": "K4",
+      "family": "material",
+      "name": "The numbers",
+      "prompt": "The business knows numbers about itself or its work (an M… or D… item). Let them be the imagery."
+    },
+    {
+      "id": "K5",
+      "family": "material",
+      "name": "The hands",
+      "prompt": "The people who do the work, their tools and their marks: let the site carry something made by hand by them."
+    },
+    {
+      "id": "K6",
+      "family": "material",
+      "name": "The place",
+      "prompt": "Where the business is: its light, its street, its weather, its materials. Take the palette and the rhythm from there."
+    },
+    {
+      "id": "K7",
+      "family": "material",
+      "name": "The by-product",
+      "prompt": "What the work leaves behind (offcuts, drafts, test pieces, crossed-out versions): make the leftover the ornament."
+    },
+    {
+      "id": "K8",
+      "family": "material",
+      "name": "The customer's own words",
+      "prompt": "Something customers say about the business, in their words, becomes the scene the site stages: what would a visitor see if that sentence were a place?"
+    },
+    {
+      "id": "K9",
+      "family": "idea",
+      "name": "The verb",
+      "prompt": "Say what the business does as one verb. Make the site do that verb to the visitor."
+    },
+    {
+      "id": "K10",
+      "family": "idea",
+      "name": "The contradiction made visible",
+      "prompt": "Take one of the frame's contradictions and show both sides at once in the layout, instead of hiding one."
+    },
+    {
+      "id": "K11",
+      "family": "idea",
+      "name": "The one object",
+      "prompt": "Choose one object that stands for the whole business. Everything on the site is arranged around it, or is it."
+    },
+    {
+      "id": "K12",
+      "family": "idea",
+      "name": "The wrong scale",
+      "prompt": "Show the smallest thing the business cares about very large, or its largest thing very small."
+    },
+    {
+      "id": "K13",
+      "family": "idea",
+      "name": "The rule",
+      "prompt": "Invent one strict rule the whole design obeys (everything travels left to right, nothing is a rectangle, light only comes from one side) that comes from how the business works."
+    },
+    {
+      "id": "K14",
+      "family": "idea",
+      "name": "What it refuses",
+      "prompt": "Name the thing this business will not do that its rivals do. Let the design refuse something too, for the same reason."
+    },
+    {
+      "id": "K15",
+      "family": "idea",
+      "name": "The visitor's question",
+      "prompt": "The one question every visitor arrives with. The site is the answer to it and nothing else until it is answered."
+    },
+    {
+      "id": "K17",
+      "family": "constraint",
+      "name": "One colour",
+      "prompt": "One colour and paper white. Which colour, taken from where in the business, and what does it have to do alone?"
+    },
+    {
+      "id": "K18",
+      "family": "constraint",
+      "name": "One screen",
+      "prompt": "The whole site fits one screen with no scrolling. What stays, and how does a visitor reach the rest?"
+    },
+    {
+      "id": "K20",
+      "family": "constraint",
+      "name": "No hero",
+      "prompt": "No large picture and headline at the top. What is the first thing a visitor meets instead, and why is it better?"
+    },
+    {
+      "id": "K21",
+      "family": "constraint",
+      "name": "Half the words",
+      "prompt": "Half of everything the site says is cut. What is left, and what does the space it leaves become?"
+    },
+    {
+      "id": "K22",
+      "family": "constraint",
+      "name": "Only what they have",
+      "prompt": "Nothing may be shown that the business does not already own or make: no stock, no generated pictures. Design from the M… items alone."
+    },
+    {
+      "id": "K23",
+      "family": "far-field",
+      "name": "How a poster does it",
+      "prompt": "One image, one line, read from across a street. What would this site be as a single poster, and what of that survives on a screen?"
+    },
+    {
+      "id": "K24",
+      "family": "far-field",
+      "name": "How a film opens",
+      "prompt": "A title sequence sets the tone before the story starts. What would the first ten seconds be, and when should a visitor be able to skip them?"
+    },
+    {
+      "id": "K25",
+      "family": "far-field",
+      "name": "How an exhibition does it",
+      "prompt": "Rooms, a route, one object lit in each, a label read up close. Borrow the way a good exhibition paces a visitor."
+    },
+    {
+      "id": "K26",
+      "family": "far-field",
+      "name": "How a building does it",
+      "prompt": "A threshold, a hall, light from one side, a stair that invites. Borrow the way a building brings someone in and lets them find their way."
+    },
+    {
+      "id": "K27",
+      "family": "far-field",
+      "name": "How a book does it",
+      "prompt": "A cover, a title page, margins, a running head, the turn of a page. Borrow one thing a well-made book does."
+    },
+    {
+      "id": "K28",
+      "family": "far-field",
+      "name": "How packaging does it",
+      "prompt": "What is said on the outside, what is found on opening, the pleasure of unwrapping. Borrow the order in which a good package reveals itself."
+    },
+    {
+      "id": "K29",
+      "family": "far-field",
+      "name": "How a map does it",
+      "prompt": "Everything at once and each thing in its place; a legend; detail on coming closer. Borrow how a map lets someone choose their own way."
+    },
+    {
+      "id": "K30",
+      "family": "far-field",
+      "name": "How a stage does it",
+      "prompt": "An empty stage, one light, an entrance. Borrow how a theatre makes a single thing matter by taking the rest away."
+    },
+    {
+      "id": "K31",
+      "family": "far-field",
+      "name": "How a shop window does it",
+      "prompt": "Seen in three seconds by someone walking past, changed with the season. Borrow how a window stops a passer-by."
+    },
+    {
+      "id": "K32",
+      "family": "far-field",
+      "name": "How a score does it",
+      "prompt": "Rhythm, rests, loud and soft, a theme that returns. Lay the page out as a piece of music is written."
+    },
+    {
+      "id": "K33",
+      "family": "time",
+      "name": "Cause and effect",
+      "prompt": "Nothing moves unless the visitor did something, and what moves is the answer to what they did."
+    },
+    {
+      "id": "K34",
+      "family": "time",
+      "name": "Weight",
+      "prompt": "Give things on the page weight: heavy things move slowly and settle, light things are quick. What in this business is heavy?"
+    },
+    {
+      "id": "K35",
+      "family": "time",
+      "name": "The first second",
+      "prompt": "What is true of the site in its first second, before anything has loaded that can be waited for?"
+    },
+    {
+      "id": "K36",
+      "family": "time",
+      "name": "The tenth visit",
+      "prompt": "Design for someone who has been here nine times and wants one thing. What do they see that a first visitor does not?"
+    },
+    {
+      "id": "K37",
+      "family": "time",
+      "name": "The hour of the day",
+      "prompt": "The site is not the same in the morning and at night, in June and in December, because the business is not."
+    },
+    {
+      "id": "K38",
+      "family": "time",
+      "name": "The slow thing",
+      "prompt": "One thing on the site changes so slowly that a visitor notices only on coming back. What is it, and what does it say?"
+    },
+    {
+      "id": "K39",
+      "family": "time",
+      "name": "The pause",
+      "prompt": "Put a deliberate pause where every other site hurries: before a price, after a claim, at the end. What fills it?"
+    },
+    {
+      "id": "K41",
+      "family": "voice",
+      "name": "The label",
+      "prompt": "Every button, heading and caption is written as this business would say it out loud. What do the plainest words on the page become?"
+    },
+    {
+      "id": "K42",
+      "family": "voice",
+      "name": "The list",
+      "prompt": "The site is a list: of works, of prices, of people, of days. Make the plainest form the most considered one."
+    },
+    {
+      "id": "K43",
+      "family": "voice",
+      "name": "The footnote",
+      "prompt": "The small print, the aside, the correction in the margin: let what is usually hidden at the bottom carry the character."
+    },
+    {
+      "id": "K44",
+      "family": "separation",
+      "name": "Separate in time",
+      "prompt": "Let both sides of the contradiction hold, at different moments of a visit: one on arrival, the other once the visitor has what they came for."
+    },
+    {
+      "id": "K45",
+      "family": "separation",
+      "name": "Separate in space",
+      "prompt": "Let both sides hold in different places: one above the fold and the other below, one on a wide screen and the other on a narrow one."
+    },
+    {
+      "id": "K46",
+      "family": "separation",
+      "name": "Separate on condition",
+      "prompt": "Let each side hold only for some visitors or some visits: the one who is new, the one who came back, the one who asked for less motion."
+    },
+    {
+      "id": "K47",
+      "family": "separation",
+      "name": "Separate the part from the whole",
+      "prompt": "Let the whole have one quality and each part the opposite: calm as a whole, rich in each detail; loud at a glance, quiet up close."
+    },
+    {
+      "id": "K48",
+      "family": "visual",
+      "name": "Light",
+      "prompt": "Where does the light come from in this business's world: a lamp, a screen, dawn, a furnace? Light the whole site from there, and let it change as the visitor moves."
+    },
+    {
+      "id": "K49",
+      "family": "visual",
+      "name": "Depth",
+      "prompt": "The site is a space, not a sheet: things stand in front of and behind each other. What is near, what is far, and what does moving through it reveal?"
+    },
+    {
+      "id": "K50",
+      "family": "visual",
+      "name": "The material",
+      "prompt": "Everything on the page behaves like one material from the business's world (paper, cable, glass, water, metal): it folds, bends, catches light or flows as that material would."
+    },
+    {
+      "id": "K51",
+      "family": "visual",
+      "name": "The mechanism",
+      "prompt": "Show the machine working: the parts, the connections, the moving pieces of how this business gets its work done, drawn so a visitor can watch it run."
+    },
+    {
+      "id": "K52",
+      "family": "visual",
+      "name": "The camera",
+      "prompt": "The visitor is a camera moving through the business's world: a long take, a pull back to reveal, a close-up. Direct the shot."
+    },
+    {
+      "id": "K53",
+      "family": "visual",
+      "name": "The diagram that lives",
+      "prompt": "The drawing the business would make on a whiteboard to explain itself becomes the site, and it comes alive under the visitor's hand."
+    },
+    {
+      "id": "K54",
+      "family": "time",
+      "name": "The transformation",
+      "prompt": "Something on the site turns into something else as the visitor scrolls: chaos into order, night into day, raw into finished. What turns into what, for this business?"
+    },
+    {
+      "id": "K55",
+      "family": "time",
+      "name": "The answer to touch",
+      "prompt": "Every touch, click or pause of the visitor gets a physical answer: a ripple, a pull, a light that follows. What does this business's world do when touched?"
+    }
+  ]
+}
